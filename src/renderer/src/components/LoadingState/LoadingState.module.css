@@ -1,0 +1,205 @@
+/* Shared overlay positioning for both LoadingState and AllSourcesFailed */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  gap: var(--space-2);
+  padding: var(--space-6);
+  z-index: 5;
+}
+
+/* LoadingState */
+.heading {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+  text-align: center;
+}
+
+.gameTitle {
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+.gameMeta {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-4) 0;
+  text-align: center;
+}
+
+.progressTrack {
+  width: 240px;
+  height: 3px;
+  background: var(--color-surface-3);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  margin-top: var(--space-4);
+}
+
+.progressBar {
+  height: 100%;
+  width: 60%;
+  border-radius: var(--radius-pill);
+  background: var(--text-secondary);
+  animation: progress-sweep 1.5s linear infinite;
+}
+
+/* League accent colors for the progress bar */
+.accent_nba {
+  background: var(--accent-nba);
+}
+
+.accent_nfl {
+  background: var(--accent-nfl);
+}
+
+.accent_cbb {
+  background: var(--accent-cbb);
+}
+
+.accent_cfb {
+  background: var(--accent-cfb);
+}
+
+.sourcesText {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin: var(--space-2) 0 0 0;
+  text-align: center;
+}
+
+/* AllSourcesFailed */
+.buttonRow {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.retryButton {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface-1);
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+/* Accent border overrides for Retry button */
+.accentBorder_nba {
+  border-color: var(--accent-nba);
+}
+
+.accentBorder_nfl {
+  border-color: var(--accent-nfl);
+}
+
+.accentBorder_cbb {
+  border-color: var(--accent-cbb);
+}
+
+.accentBorder_cfb {
+  border-color: var(--accent-cfb);
+}
+
+.retryButton:hover {
+  background: var(--color-surface-2);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.pickSourceButton {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface-1);
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.pickSourceButton:hover {
+  background: var(--color-surface-2);
+}
+
+.pickSourceButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.diagnosticsLink {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  text-decoration: none;
+  margin-top: var(--space-4);
+}
+
+.diagnosticsLink:hover {
+  color: var(--text-secondary);
+}
+
+.backLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  margin-top: var(--space-2);
+}
+
+.backLink:hover {
+  color: var(--text-secondary);
+}
+
+/* Progress bar animation */
+@keyframes progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(calc(240px / 0.6));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBar {
+    animation: none;
+    opacity: 0.6;
+  }
+}

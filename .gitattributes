@@ -1,0 +1,8 @@
+# The fixture media are MPEG-TS video segments, not TypeScript. Without this,
+# GitHub's language detection counts them as .ts source files.
+tests/fixtures/media/**   binary linguist-vendored
+
+# Demo media and generated files
+docs/media/**             binary linguist-documentation
+package-lock.json         linguist-generated
+*.tsbuildinfo             linguist-generated

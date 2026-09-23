@@ -1,0 +1,212 @@
+.sidebar {
+  /* Dimensions */
+  height: 100vh;
+  flex-shrink: 0;
+
+  /* Glass surface */
+  background: var(--color-surface-1);
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid var(--glass-border-subtle);
+
+  /* Z-index */
+  z-index: var(--z-sidebar);
+
+  /* Layout */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* Collapse animation */
+  transition: width var(--duration-slow) var(--ease-spring);
+}
+
+.sidebarExpanded {
+  width: 220px;
+}
+
+.sidebarCollapsed {
+  width: 64px;
+}
+
+/* ----------------------------------------------------------
+   Header: wordmark + collapse toggle
+   ---------------------------------------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-4) var(--space-4);
+  min-height: 64px;
+  flex-shrink: 0;
+}
+
+.wordmark {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  user-select: none;
+}
+
+.wordmarkCollapsed {
+  font-size: var(--font-size-xs);
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0;
+}
+
+.toggleBtn {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-base) ease, color var(--duration-base) ease;
+  flex-shrink: 0;
+}
+
+.toggleBtn:hover {
+  background: var(--color-surface-2);
+  color: var(--text-primary);
+}
+
+.toggleBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------
+   Nav
+   ---------------------------------------------------------- */
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 var(--space-2);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-base) ease, color var(--duration-base) ease;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.navItem:hover {
+  background: var(--color-surface-2);
+  color: var(--text-primary);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+/* Active nav item */
+.navItemActive {
+  color: var(--text-primary);
+}
+
+/* League-specific active backgrounds */
+.navItemActive[data-league="nba"] { background: rgba(255, 107, 0, 0.15); }
+.navItemActive[data-league="nfl"] { background: rgba(59, 130, 246, 0.15); }
+.navItemActive[data-league="cbb"] { background: rgba(220, 38, 38, 0.15); }
+.navItemActive[data-league="cfb"] { background: rgba(22, 163, 74, 0.15); }
+.navItemActive[data-league="all"] { background: var(--color-surface-2); }
+.navItemActive[data-league="diagnostics"] { background: var(--color-surface-2); }
+
+/* Icon area */
+.iconWrapper {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* League-specific active icon colors */
+.navItemActive[data-league="nba"] .icon { color: var(--accent-nba); }
+.navItemActive[data-league="nfl"] .icon { color: var(--accent-nfl); }
+.navItemActive[data-league="cbb"] .icon { color: var(--accent-cbb); }
+.navItemActive[data-league="cfb"] .icon { color: var(--accent-cfb); }
+
+.icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  transition: color var(--duration-base) ease;
+}
+
+/* Nav item label */
+.label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.labelActive {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.labelHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------
+   Live dot
+   ---------------------------------------------------------- */
+
+.liveDot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-live);
+  animation: pulse-live 1.4s ease-in-out infinite;
+}
+
+/* ----------------------------------------------------------
+   Divider
+   ---------------------------------------------------------- */
+
+.divider {
+  height: 1px;
+  background: var(--glass-border-subtle);
+  margin: var(--space-4) var(--space-2);
+  flex-shrink: 0;
+}

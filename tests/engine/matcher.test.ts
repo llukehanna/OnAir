@@ -1,0 +1,261 @@
+import { matchGame, matchTeam } from '../../src/main/engine/matcher'
+import type { Game } from '../../src/main/types'
+
+// Helper to build a minimal Game object
+function makeGame(
+  league: Game['league'],
+  teamHome: string,
+  teamAway: string
+): Game {
+  return {
+    gameId: 'test-game',
+    league,
+    teamHome,
+    teamAway,
+    startTime: Date.now(),
+    status: 'LIVE',
+  }
+}
+
+// ─── matchGame: NBA ───────────────────────────────────────────────────────────
+
+describe('matchGame NBA', () => {
+  const game = makeGame('nba', 'Los Angeles Lakers', 'Golden State Warriors')
+
+  it('returns 0.9 when both teams appear in sourceText', () => {
+    expect(matchGame(game, 'lakers vs warriors')).toBe(0.9)
+  })
+
+  it('returns 0.9 with full team names', () => {
+    expect(matchGame(game, 'Los Angeles Lakers vs Golden State Warriors')).toBe(0.9)
+  })
+
+  it('returns 0.9 using abbreviations for both teams', () => {
+    expect(matchGame(game, 'LAL vs GSW live stream')).toBe(0.9)
+  })
+
+  it('returns 0.5 when only home team matches', () => {
+    expect(matchGame(game, 'Watch Lakers tonight')).toBe(0.5)
+  })
+
+  it('returns 0.5 when only away team matches', () => {
+    expect(matchGame(game, 'Golden State Warriors game')).toBe(0.5)
+  })
+
+  it('returns 0 when neither team matches', () => {
+    expect(matchGame(game, 'random text about nothing')).toBe(0)
+  })
+
+  it('is case insensitive: LAKERS VS WARRIORS -> 0.9', () => {
+    expect(matchGame(game, 'LAKERS VS WARRIORS')).toBe(0.9)
+  })
+
+  it('strips punctuation: Lakers-vs-Warriors! -> 0.9', () => {
+    expect(matchGame(game, 'Lakers-vs-Warriors!')).toBe(0.9)
+  })
+})
+
+// ─── matchGame: NFL ───────────────────────────────────────────────────────────
+
+describe('matchGame NFL', () => {
+  const game = makeGame('nfl', 'Kansas City Chiefs', 'Baltimore Ravens')
+
+  it('returns 0.9 for chiefs vs ravens', () => {
+    expect(matchGame(game, 'chiefs vs ravens')).toBe(0.9)
+  })
+
+  it('returns 0.9 via abbreviations KC vs BAL', () => {
+    expect(matchGame(game, 'KC vs BAL')).toBe(0.9)
+  })
+
+  it('returns 0.9 via full names', () => {
+    expect(matchGame(game, 'Kansas City Chiefs vs Baltimore Ravens')).toBe(0.9)
+  })
+
+  it('returns 0.5 when only Chiefs matches', () => {
+    expect(matchGame(game, 'Kansas City Chiefs stream')).toBe(0.5)
+  })
+
+  it('returns 0 when no match', () => {
+    expect(matchGame(game, 'NBA finals highlights')).toBe(0)
+  })
+
+  // Additional NFL variant
+  it('returns 0.9 for Dallas Cowboys vs New England Patriots via abbreviations', () => {
+    const g = makeGame('nfl', 'Dallas Cowboys', 'New England Patriots')
+    expect(matchGame(g, 'DAL vs NE live')).toBe(0.9)
+  })
+})
+
+// ─── matchGame: CBB ───────────────────────────────────────────────────────────
+
+describe('matchGame CBB', () => {
+  it('returns 0.9 for duke vs north carolina (school names)', () => {
+    const game = makeGame('cbb', 'Duke Blue Devils', 'North Carolina Tar Heels')
+    expect(matchGame(game, 'duke vs north carolina')).toBe(0.9)
+  })
+
+  it('returns 0.9 using UNC abbreviation', () => {
+    const game = makeGame('cbb', 'Duke Blue Devils', 'North Carolina Tar Heels')
+    expect(matchGame(game, 'Duke vs UNC rivalry')).toBe(0.9)
+  })
+
+  it('returns 0.3 for CBB nickname-only match: "tigers" alone for Auburn Tigers', () => {
+    const game = makeGame('cbb', 'Auburn Tigers', 'Kentucky Wildcats')
+    // Only "tigers" in text — ambiguous nickname, no school name
+    expect(matchGame(game, 'Watch the tigers tonight')).toBe(0.3)
+  })
+
+  it('does NOT reduce to 0.3 when full name "auburn tigers" is present (school + nickname)', () => {
+    const game = makeGame('cbb', 'Auburn Tigers', 'Duke Blue Devils')
+    expect(matchGame(game, 'auburn tigers vs duke')).toBe(0.9)
+  })
+
+  it('returns 0.9 for Kansas vs Duke using school names', () => {
+    const game = makeGame('cbb', 'Kansas Jayhawks', 'Duke Blue Devils')
+    expect(matchGame(game, 'Kansas vs Duke game stream')).toBe(0.9)
+  })
+
+  it('returns 0.9 for Michigan State MSU abbreviation', () => {
+    const game = makeGame('cbb', 'Michigan State Spartans', 'Duke Blue Devils')
+    expect(matchGame(game, 'MSU vs Duke')).toBe(0.9)
+  })
+})
+
+// ─── matchGame: CFB ───────────────────────────────────────────────────────────
+
+describe('matchGame CFB', () => {
+  it('returns 0.9 for Alabama vs Georgia', () => {
+    const game = makeGame('cfb', 'Alabama Crimson Tide', 'Georgia Bulldogs')
+    expect(matchGame(game, 'Alabama vs Georgia')).toBe(0.9)
+  })
+
+  it('returns 0.9 using Bama nickname', () => {
+    const game = makeGame('cfb', 'Alabama Crimson Tide', 'Ohio State Buckeyes')
+    expect(matchGame(game, 'Bama vs Ohio State')).toBe(0.9)
+  })
+
+  it('returns 0.9 using OSU abbreviation', () => {
+    const game = makeGame('cfb', 'Alabama Crimson Tide', 'Ohio State Buckeyes')
+    expect(matchGame(game, 'Alabama vs OSU CFB playoff')).toBe(0.9)
+  })
+
+  it('returns 0.3 for CFB nickname-only match: "wildcats" alone for Arizona Wildcats', () => {
+    const game = makeGame('cfb', 'Arizona Wildcats', 'Oregon Ducks')
+    // Only "wildcats" in text — ambiguous nickname
+    expect(matchGame(game, 'Wildcats game tonight')).toBe(0.3)
+  })
+
+  it('returns 0.9 for Notre Dame vs Michigan', () => {
+    const game = makeGame('cfb', 'Notre Dame Fighting Irish', 'Michigan Wolverines')
+    expect(matchGame(game, 'Notre Dame vs Michigan rivalry')).toBe(0.9)
+  })
+
+  it('returns 0.9 via Irish nickname for Notre Dame', () => {
+    const game = makeGame('cfb', 'Notre Dame Fighting Irish', 'USC Trojans')
+    expect(matchGame(game, 'Irish vs USC')).toBe(0.9)
+  })
+})
+
+// ─── matchTeam: direct tests ──────────────────────────────────────────────────
+
+describe('matchTeam NBA', () => {
+  it('resolves "LAL" to Los Angeles Lakers', () => {
+    const result = matchTeam('Los Angeles Lakers', 'nba', 'lal stream live')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('resolves "Celtics" to Boston Celtics', () => {
+    const result = matchTeam('Boston Celtics', 'nba', 'celtics game tonight')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('returns 0 for no match', () => {
+    const result = matchTeam('Los Angeles Lakers', 'nba', 'random text')
+    expect(result.score).toBe(0)
+  })
+})
+
+describe('matchTeam NFL', () => {
+  it('resolves "ATL" to Atlanta Falcons', () => {
+    const result = matchTeam('Atlanta Falcons', 'nfl', 'atl vs nfc')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('resolves "Chiefs" to Kansas City Chiefs', () => {
+    const result = matchTeam('Kansas City Chiefs', 'nfl', 'chiefs are playing')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+})
+
+describe('matchTeam CBB', () => {
+  it('resolves "Duke" (school name) to Duke Blue Devils', () => {
+    const result = matchTeam('Duke Blue Devils', 'cbb', 'duke basketball stream')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('resolves "UNC" abbreviation to North Carolina Tar Heels', () => {
+    const result = matchTeam('North Carolina Tar Heels', 'cbb', 'unc vs duke')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('returns nicknameOnly=true when only ambiguous nickname "Tigers" matches (CBB)', () => {
+    const result = matchTeam('Auburn Tigers', 'cbb', 'tigers game')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(true)
+  })
+
+  it('returns nicknameOnly=false when "auburn tigers" (school+nickname) matches', () => {
+    const result = matchTeam('Auburn Tigers', 'cbb', 'auburn tigers stream')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+})
+
+describe('matchTeam CFB', () => {
+  it('resolves "Bama" to Alabama Crimson Tide', () => {
+    const result = matchTeam('Alabama Crimson Tide', 'cfb', 'bama is up by 7')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('resolves "OSU" to Ohio State Buckeyes', () => {
+    const result = matchTeam('Ohio State Buckeyes', 'cfb', 'osu is playing today')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(false)
+  })
+
+  it('returns nicknameOnly=true when only ambiguous nickname "Wildcats" matches (CFB)', () => {
+    const result = matchTeam('Arizona Wildcats', 'cfb', 'wildcats game')
+    expect(result.score).toBe(1.0)
+    expect(result.nicknameOnly).toBe(true)
+  })
+})
+
+// ─── CBB nickname-only edge cases ────────────────────────────────────────────
+
+describe('CBB/CFB nickname-only edge cases for matchGame', () => {
+  it('CBB: both teams have ambiguous nicknames only → 0.3', () => {
+    // Tigers (Auburn) and Wildcats (Kentucky) — both ambiguous nickname-only
+    const game = makeGame('cbb', 'Auburn Tigers', 'Kentucky Wildcats')
+    expect(matchGame(game, 'tigers vs wildcats')).toBe(0.3)
+  })
+
+  it('CBB: one team has ambiguous nickname, other has school name → 0.9', () => {
+    // "Kentucky" (non-ambiguous school name) + "tigers" (ambiguous)
+    const game = makeGame('cbb', 'Auburn Tigers', 'Kentucky Wildcats')
+    // "Kentucky" is a school name alias (non-ambiguous), "tigers" is ambiguous
+    expect(matchGame(game, 'kentucky vs tigers')).toBe(0.9)
+  })
+
+  it('CFB: both teams have ambiguous nicknames only → 0.3', () => {
+    const game = makeGame('cfb', 'Arizona Wildcats', 'Baylor Bears')
+    expect(matchGame(game, 'wildcats vs bears')).toBe(0.3)
+  })
+})

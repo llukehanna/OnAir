@@ -1,0 +1,96 @@
+/* FailoverToast — fixed bottom-left notifications */
+
+.toastContainer {
+  position: fixed;
+  bottom: var(--space-6);
+  left: var(--space-6);
+  z-index: 50; /* --z-toast */
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+/* Individual toast — glass card style */
+.toast {
+  background: var(--color-surface-1);
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-bottom-color: var(--glass-border-subtle);
+  border-right-color: var(--glass-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-primary);
+  white-space: nowrap;
+
+  /* Entry animation */
+  animation: toast-slide-in 300ms var(--ease-spring) both;
+}
+
+/* Dismiss state */
+.toastDismissing {
+  animation: toast-dismiss 200ms var(--ease-in-out) both;
+}
+
+/* Slide in from below */
+@keyframes toast-slide-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Fade out on dismiss */
+@keyframes toast-dismiss {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Reduced motion — disable transforms, keep opacity only */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: toast-fade-in 200ms var(--ease-out) both;
+  }
+
+  .toastDismissing {
+    animation: toast-fade-out 200ms var(--ease-in-out) both;
+  }
+
+  @keyframes toast-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes toast-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}

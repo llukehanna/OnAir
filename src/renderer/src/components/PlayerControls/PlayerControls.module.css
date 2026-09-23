@@ -1,0 +1,103 @@
+/* Player controls overlay — bottom of video area */
+
+.controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-controls);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* Spacer pushes elements to either side */
+.spacer {
+  flex: 1;
+}
+
+/* Volume slider */
+.volumeSlider {
+  width: 96px;
+  height: 4px;
+  cursor: pointer;
+  accent-color: #ffffff;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.volumeSlider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--color-surface-3);
+  border-radius: var(--radius-pill);
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  margin-top: -4px;
+}
+
+.volumeSlider:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
+}
+
+/* Icon buttons — 44x44px touch targets */
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.iconButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+/* Game title in controls bar */
+.gameTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+/* Game clock */
+.gameClock {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controls {
+    transition: none;
+  }
+}

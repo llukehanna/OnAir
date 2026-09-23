@@ -1,0 +1,64 @@
+/* ============================================================
+   HomeScreen — game rails with Live Now, Starting Soon, Recently Ended
+   ============================================================ */
+
+.container {
+  padding: var(--space-6);
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Section ──────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-8);
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Section heading ──────────────────────────────────────── */
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4) 0;
+  line-height: var(--line-height-tight);
+}
+
+.sectionHeadingSecondary {
+  color: var(--text-secondary);
+}
+
+/* Live dot before "Live Now" heading */
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-live);
+  flex-shrink: 0;
+  animation: pulse-live 1.4s ease-in-out infinite;
+}
+
+/* ── Game grid ────────────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+/* ── State messages ───────────────────────────────────────── */
+
+.message {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
+  text-align: center;
+  margin: var(--space-16) auto 0;
+}
