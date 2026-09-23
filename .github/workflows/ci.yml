@@ -11,8 +11,8 @@ jobs:
     # Electron's ABI on install, so tests run inside Electron's Node.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -26,8 +26,8 @@ jobs:
     # Real-decoder tier: Chromium plays actual MPEG-TS through a stream swap.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

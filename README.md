@@ -1,5 +1,7 @@
 # OnAir
 
+[![CI](https://github.com/llukehanna/OnAir/actions/workflows/ci.yml/badge.svg)](https://github.com/llukehanna/OnAir/actions/workflows/ci.yml)
+
 A macOS desktop player that turns "click a game" into a live stream that stays up.
 
 OnAir discovers games, collects candidate HLS streams from pluggable sources, probes and ranks them, and plays the best one.
