@@ -14,6 +14,8 @@ declare global {
 
   type StreamType = 'hls' | 'dash' | 'embedded'
 
+  type ChannelCategory = 'sports' | 'news' | 'entertainment' | 'other'
+
   type PlaybackEventType =
     | 'stream_started'
     | 'stream_failed'
@@ -57,6 +59,44 @@ declare global {
     enabled: boolean
     needsAdapter: boolean
     addedAt: number
+  }
+
+  interface Channel {
+    channelId: string
+    name: string
+    category: ChannelCategory
+    sourceCount: number
+    lastSeenAt: number
+  }
+
+  interface ChannelSourceLink {
+    channelId: string
+    sourceId: string
+    url: string
+    label: string
+    seenAt: number
+  }
+
+  /** One entry from an adapter's channel listing — not yet persisted. */
+  interface ChannelListing {
+    label: string
+    url: string
+  }
+
+  interface GuideProgram {
+    channelId: string
+    title: string
+    subtitle?: string
+    start: number
+    end: number
+    kind: 'game' | 'show'
+    gameId?: string
+  }
+
+  interface GuideData {
+    channels: Channel[]
+    programs: GuideProgram[]
+    generatedAt: number
   }
 
   interface StreamCandidate {

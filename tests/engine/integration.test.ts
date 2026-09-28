@@ -1,6 +1,6 @@
 import { getStreamCandidates } from '../../src/main/engine/index'
 import type { SourceAdapter, RawStreamCandidate } from '../../src/main/adapters/base'
-import type { Game } from '../../src/main/types'
+import type { Game, WatchTarget } from '../../src/main/types'
 import { createTestDbWithMigrations } from '../helpers/db'
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,8 @@ const NBA_GAME: Game = {
   startTime: Date.now(),
   status: 'LIVE',
 }
+
+const NBA_TARGET: WatchTarget = { kind: 'game', id: NBA_GAME.gameId, scope: NBA_GAME.league, game: NBA_GAME }
 
 const MANIFEST_1080P = [
   '#EXTM3U',
@@ -122,7 +124,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     const results = await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     expect(results).toHaveLength(2)
@@ -152,7 +154,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     const results = await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     expect(results[0].sourceId).toBe('source_a')
@@ -183,7 +185,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     const results = await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     const cA = results.find(r => r.sourceId === 'source_a')
@@ -216,7 +218,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     const results = await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     for (const candidate of results) {
@@ -249,7 +251,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     const rows = db.prepare(
@@ -283,7 +285,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     }) as unknown as typeof fetch
 
     await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     const eventRows = db.prepare(
@@ -304,7 +306,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     const mockFetch = jest.fn() as unknown as typeof fetch
 
     const results = await getStreamCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      NBA_TARGET, undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toEqual([])
@@ -321,7 +323,7 @@ describe('getStreamCandidates — full pipeline integration', () => {
     const mockFetch = jest.fn() as unknown as typeof fetch
 
     await expect(
-      getStreamCandidates(NBA_GAME, undefined, db, mockFetch, () => [adapter])
+      getStreamCandidates(NBA_TARGET, undefined, db, mockFetch, () => [adapter])
     ).resolves.toEqual([])
   })
 })

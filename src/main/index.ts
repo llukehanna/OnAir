@@ -129,11 +129,11 @@ app.whenReady().then(async () => {
   // 5.5. Create PlaybackManager (needs window reference and pool for Playwright extraction)
   playbackManager = new PlaybackManager(
     win,
-    undefined, // getGameFn — default
+    undefined, // getTargetFn — default (resolveTarget)
     undefined, // getCacheEntriesFn — default
     undefined, // classifyEntryFn — default
     undefined, // validateStaleFn — default
-    (game) => getStreamCandidates(game, pool ?? undefined), // bind pool
+    (target) => getStreamCandidates(target, pool ?? undefined), // bind pool
   )
 
   // 6. Register IPC handlers (pass playbackManager)

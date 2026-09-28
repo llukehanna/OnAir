@@ -1,4 +1,4 @@
-import type { Game, SourceClassification, LeagueId, ExtractionMethod, HealthState, StreamType } from '../types'
+import type { Game, SourceClassification, LeagueId, ExtractionMethod, HealthState, StreamType, ChannelListing } from '../types'
 import type { PlaywrightPool } from './pool'
 import type { BrowserContext } from 'playwright'
 
@@ -13,6 +13,12 @@ export interface SourceAdapter {
 
   getCandidateStreams(game: Game, pool: PlaywrightPool): Promise<RawStreamCandidate[]>
   getSourceHealth(pool: PlaywrightPool): Promise<HealthState>
+
+  /** Lists this source's 24/7 channels. Omit on an adapter that has none. */
+  listChannels?(pool: PlaywrightPool): Promise<ChannelListing[]>
+  /** Extracts streams for one channel listing's url, as getCandidateStreams
+   *  does for a game. Omit on an adapter that has none. */
+  getChannelStreams?(url: string, pool: PlaywrightPool): Promise<RawStreamCandidate[]>
 }
 
 export interface RawStreamCandidate {

@@ -1,5 +1,5 @@
 import { PlaybackManager } from '../../src/main/playback/manager'
-import type { Game, PlaybackEvent, StreamCandidate } from '../../src/main/types'
+import type { Game, PlaybackEvent, StreamCandidate, WatchTarget } from '../../src/main/types'
 import type { UrlCacheEntry } from '../../src/main/engine/cache'
 
 // ---------------------------------------------------------------------------
@@ -20,6 +20,11 @@ function makeGame(id = 'game-1'): Game {
     startTime: FIXED_START_TIME,
     status: 'LIVE',
   }
+}
+
+function makeGameTarget(id = 'game-1'): WatchTarget {
+  const game = makeGame(id)
+  return { kind: 'game', id: game.gameId, scope: game.league, game }
 }
 
 function makeEntry(overrides: Partial<UrlCacheEntry> = {}): UrlCacheEntry {
@@ -81,7 +86,7 @@ describe('PlaybackManager', () => {
     const entry = makeEntry()
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [entry],
       () => 'fresh',
       async () => null,
@@ -104,7 +109,7 @@ describe('PlaybackManager', () => {
     const validateFn = jest.fn().mockResolvedValue(staleEntry)
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [staleEntry],
       () => 'stale',
       validateFn,
@@ -125,7 +130,7 @@ describe('PlaybackManager', () => {
     const setCacheFn = jest.fn()
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [],
       () => 'expired',
       async () => null,
@@ -135,7 +140,7 @@ describe('PlaybackManager', () => {
     )
     const result = await mgr.play('game-1')
     expect(result.ok).toBe(true)
-    expect(getStreamFn).toHaveBeenCalledWith(makeGame())
+    expect(getStreamFn).toHaveBeenCalledWith(makeGameTarget())
     expect(setCacheFn).toHaveBeenCalled()
     if (result.ok) {
       expect(result.streamUrl).toBe(candidate.streamUrl)
@@ -163,7 +168,7 @@ describe('PlaybackManager', () => {
   it('play(gameId) when no candidates found returns no_candidates', async () => {
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [],
       () => 'expired',
       async () => null,
@@ -182,7 +187,7 @@ describe('PlaybackManager', () => {
     const entry = makeEntry()
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [entry],
       () => 'fresh',
       async () => null,
@@ -200,7 +205,7 @@ describe('PlaybackManager', () => {
     const win = makeMockWin()
     const mgr = new PlaybackManager(
       win,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [entry],
       () => 'fresh',
       async () => null,
@@ -221,9 +226,9 @@ describe('PlaybackManager', () => {
     const entry1 = makeEntry({ sourceId: 'src-1', streamUrl: 'https://cdn.example.com/1.m3u8' })
     const entry2 = makeEntry({ gameId: 'game-2', sourceId: 'src-2', streamUrl: 'https://cdn.example.com/2.m3u8' })
 
-    const getGameFn = jest.fn()
-      .mockReturnValueOnce(makeGame('game-1'))
-      .mockReturnValueOnce(makeGame('game-2'))
+    const getTargetFn = jest.fn()
+      .mockReturnValueOnce(makeGameTarget('game-1'))
+      .mockReturnValueOnce(makeGameTarget('game-2'))
 
     const getCacheFn = jest.fn()
       .mockReturnValueOnce([entry1])
@@ -233,7 +238,7 @@ describe('PlaybackManager', () => {
 
     const mgr = new PlaybackManager(
       undefined,
-      getGameFn,
+      getTargetFn,
       getCacheFn,
       classifyFn,
       async () => null,
@@ -254,7 +259,7 @@ describe('PlaybackManager', () => {
     const entry = makeEntry()
     const mgr = new PlaybackManager(
       undefined,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [entry],
       () => 'fresh',
       async () => null,
@@ -273,7 +278,7 @@ describe('PlaybackManager', () => {
     const win = makeMockWin()
     const mgr = new PlaybackManager(
       win,
-      () => makeGame(),
+      () => makeGameTarget(),
       () => [entry],
       () => 'fresh',
       async () => null,
@@ -310,5 +315,36 @@ describe('PlaybackManager', () => {
       'stream_failed',
       { gameId: 'game-1', sourceId: 'src-1', details: { reason: 'timeout' } }
     )
+  })
+
+  it("play('ch:test') with an injected channel target starts playback and keys the session on the channel id", async () => {
+    const channelTarget: WatchTarget = {
+      kind: 'channel',
+      id: 'ch:test',
+      scope: 'channel',
+      channel: { channelId: 'ch:test', name: 'Test Channel', category: 'sports', sourceCount: 1, lastSeenAt: Date.now() },
+    }
+    const candidateA = makeCandidate({ candidateId: 'a', sourceId: 'src-a', gameId: 'ch:test', score: 0.9 })
+    const candidateB = makeCandidate({ candidateId: 'b', sourceId: 'src-b', gameId: 'ch:test', score: 0.5 })
+    const mgr = new PlaybackManager(
+      undefined,
+      () => channelTarget,
+      () => [],
+      () => 'expired',
+      async () => null,
+      async () => [candidateA, candidateB],
+      () => {},
+      () => {}
+    )
+
+    const result = await mgr.play('ch:test')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.candidateId).toBe('a')
+
+    // failover() refuses unless session.gameId matches the id passed in, so a
+    // successful switch here proves the session was keyed on 'ch:test'.
+    const next = await mgr.failover('ch:test', 'test_reason')
+    expect(next.ok).toBe(true)
+    if (next.ok) expect(next.candidateId).toBe('b')
   })
 })

@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { app } from 'electron'
-import type { Game, HealthState, LeagueId } from '../types'
+import type { Game, HealthState, LeagueId, ChannelListing } from '../types'
 import type { SourceAdapter, RawStreamCandidate } from '../adapters/base'
 import type { PlaywrightPool } from '../adapters/pool'
 import { startHlsFixture, type HlsFixture, type FailureMode } from './hls-fixture'
@@ -149,5 +149,43 @@ export class FixtureAdapter implements SourceAdapter {
 
   async getSourceHealth(_pool: PlaywrightPool): Promise<HealthState> {
     return primary ? 'healthy' : 'broken'
+  }
+
+  /**
+   * Two channel listings on the same fixture origin, one per stream — same
+   * dev-only role as getCandidateStreams: exercises the channel pipeline
+   * against real, playable HLS with no external source involved.
+   */
+  async listChannels(_pool: PlaywrightPool): Promise<ChannelListing[]> {
+    if (!primary || !secondary) return []
+    const origin = new URL(primary.masterUrl).origin
+    return [
+      { label: 'Fixture One HD', url: `${origin}/channel/a` },
+      { label: 'Fixture Two', url: `${origin}/channel/b` },
+    ]
+  }
+
+  /** Maps a listChannels() url back to the stream it names — 'a' -> primary, 'b' -> secondary. */
+  async getChannelStreams(url: string, _pool: PlaywrightPool): Promise<RawStreamCandidate[]> {
+    if (!primary || !secondary) return []
+    if (url.endsWith('/channel/a')) {
+      return [{
+        streamUrl: primary.masterUrl,
+        streamType: 'hls',
+        quality: '720p',
+        extractionConfidence: 0.95,
+        refererUrl: primary.masterUrl,
+      }]
+    }
+    if (url.endsWith('/channel/b')) {
+      return [{
+        streamUrl: secondary.masterUrl,
+        streamType: 'hls',
+        quality: '720p',
+        extractionConfidence: 0.85,
+        refererUrl: secondary.masterUrl,
+      }]
+    }
+    return []
   }
 }

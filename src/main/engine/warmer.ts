@@ -1,4 +1,4 @@
-import type { Game } from '../types'
+import type { Game, WatchTarget } from '../types'
 import type { PlaywrightPool } from '../adapters/pool'
 import type { SourceAdapter } from '../adapters/base'
 import Database from 'better-sqlite3'
@@ -50,7 +50,10 @@ async function extractForGame(
 
   inFlight.add(game.gameId)
   try {
-    const candidates = await getStreamCandidates(game, pool, db, fetchFn, adaptersFn)
+    // The warmer only ever pre-warms games today; channel warming lands in a
+    // later task. Wrap here rather than exporting a helper nothing else needs.
+    const target: WatchTarget = { kind: 'game', id: game.gameId, scope: game.league, game }
+    const candidates = await getStreamCandidates(target, pool, db, fetchFn, adaptersFn)
     if (candidates.length > 0) {
       setCacheEntries(game.gameId, candidates)
     }

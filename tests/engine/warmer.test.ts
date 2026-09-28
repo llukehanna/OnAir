@@ -104,7 +104,7 @@ describe('onGamesUpdated — newly LIVE game', () => {
     await Promise.resolve()
     expect(mockGetStreamCandidates).toHaveBeenCalled()
     const callArg = mockGetStreamCandidates.mock.calls[0][0]
-    expect(callArg.gameId).toBe('game-live')
+    expect(callArg.id).toBe('game-live')
   })
 
   it('does NOT trigger extraction for an already-known LIVE game', async () => {
@@ -188,7 +188,7 @@ describe('onGamesUpdated — STARTING_SOON', () => {
     await Promise.resolve()
     expect(mockGetStreamCandidates).toHaveBeenCalled()
     const callArg = mockGetStreamCandidates.mock.calls[0][0]
-    expect(callArg.gameId).toBe('game-soon')
+    expect(callArg.id).toBe('game-soon')
   })
 
   it('does NOT trigger extraction for STARTING_SOON game > 10 min from start', async () => {
@@ -371,7 +371,8 @@ describe('runWarmCycle', () => {
     await new Promise(r => setImmediate(r))
 
     expect(mockGetStreamCandidates).toHaveBeenCalledWith(
-      game, undefined, undefined, undefined, undefined
+      { kind: 'game', id: game.gameId, scope: game.league, game },
+      undefined, undefined, undefined, undefined
     )
   })
 
