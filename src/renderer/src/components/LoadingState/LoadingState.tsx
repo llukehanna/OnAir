@@ -20,22 +20,28 @@ import styles from './LoadingState.module.css'
 
 interface LoadingStateProps {
   game: Game | undefined
+  /** What's being tuned, when it isn't (only) a game — a channel's name. */
+  title?: string
+  /** Stands in for the team logos when there's no game, e.g. a channel's mark. */
+  art?: React.ReactNode
 }
 
-export function LoadingState({ game }: LoadingStateProps): React.JSX.Element {
+export function LoadingState({ game, title, art }: LoadingStateProps): React.JSX.Element {
   return (
     <div className={styles.overlay} role="status" aria-live="polite">
       <TeamWash game={game} intensity={0.7} />
       <div className={styles.body}>
-        {game && (
+        {game ? (
           <div className={styles.logos}>
             <TeamLogo team={teamOf(game, 'away')} size={88} plate />
             <span className={styles.at}>at</span>
             <TeamLogo team={teamOf(game, 'home')} size={88} plate />
           </div>
+        ) : (
+          art && <div className={styles.logos}>{art}</div>
         )}
         <p className={styles.heading}>Finding the best stream</p>
-        <p className={styles.sub}>{game ? matchupLabel(game) : 'Loading game'}</p>
+        <p className={styles.sub}>{title ?? (game ? matchupLabel(game) : 'Loading game')}</p>
         <div className={styles.track} aria-hidden="true">
           <span className={styles.bar} />
         </div>
@@ -46,6 +52,10 @@ export function LoadingState({ game }: LoadingStateProps): React.JSX.Element {
 
 interface AllSourcesFailedProps {
   game: Game | undefined
+  /** Names what failed when it isn't a game, e.g. a channel. */
+  title?: string
+  /** A channel reads "this channel" where a game reads "this game". */
+  kind?: 'game' | 'channel'
   onRetry: () => void
   onPickSource: () => void
   onBack: () => void
@@ -62,15 +72,15 @@ interface AllSourcesFailedProps {
  * missing video element are local problems, and telling the user their sources
  * are exhausted sends them looking in the wrong place.
  */
-function headingFor(reason: string | null | undefined): string {
+function headingFor(reason: string | null | undefined, kind: 'game' | 'channel'): string {
   switch (reason) {
     case 'all_sources_failed':
     case 'all_probes_failed':
       return 'Every source failed'
     case 'no_candidates':
-      return 'No stream found for this game'
+      return `No stream found for this ${kind}`
     case 'game_not_found':
-      return 'That game is no longer available'
+      return `That ${kind} is no longer available`
     case 'token_expired':
     case 'forbidden':
       return 'The stream link expired and could not be renewed'
@@ -124,6 +134,8 @@ function iconFor(reason: string | null | undefined): LucideIcon {
 
 export function AllSourcesFailed({
   game,
+  title,
+  kind = 'game',
   onRetry,
   onPickSource,
   onBack,
@@ -138,8 +150,8 @@ export function AllSourcesFailed({
         <span className={styles.reasonIcon} aria-hidden="true">
           <ReasonIcon size={22} strokeWidth={1.8} />
         </span>
-        <p className={styles.cardHeading}>{headingFor(reason)}</p>
-        {game && <p className={styles.cardSub}>{matchupLabel(game)}</p>}
+        <p className={styles.cardHeading}>{headingFor(reason, kind)}</p>
+        {(title || game) && <p className={styles.cardSub}>{title ?? (game ? matchupLabel(game) : '')}</p>}
         <div className={styles.actions}>
           <button className={styles.primary} onClick={onRetry}>
             <RotateCw size={15} strokeWidth={2.2} />
@@ -151,7 +163,7 @@ export function AllSourcesFailed({
           </button>
         </div>
         <div className={styles.links}>
-          <button className={styles.link} onClick={onBack}>Back to games</button>
+          <button className={styles.link} onClick={onBack}>{kind === 'channel' ? 'Back to guide' : 'Back to games'}</button>
           <span className={styles.sep} aria-hidden="true">·</span>
           <button className={styles.link} onClick={onOpenDiagnostics}>View diagnostics</button>
         </div>

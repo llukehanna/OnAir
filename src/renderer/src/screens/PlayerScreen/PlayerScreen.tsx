@@ -1,18 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { useGames } from '../../context/GamesContext'
+import { useGuide } from '../../context/GuideContext'
 import { LoadingState, AllSourcesFailed } from '../../components/LoadingState/LoadingState'
 import { PlayerControls } from '../../components/PlayerControls/PlayerControls'
-import { PlayerDrawer } from '../../components/PlayerDrawer/PlayerDrawer'
+import { PlayerDrawer, type ChannelNow } from '../../components/PlayerDrawer/PlayerDrawer'
+import { ChannelMark } from '../../components/ChannelTile/ChannelTile'
 import { SourceList } from '../../components/SourceList/SourceList'
 import { FailoverToast } from '../../components/FailoverToast/FailoverToast'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { usePlayerMedia } from '../../hooks/usePlayerMedia'
+import { useNow } from '../../hooks/useNow'
+import { nextProgram, onNow } from '../../lib/guide'
 import { leagueLabel, matchupLabel, statusText } from '../../lib/teams'
 import { formatKickoff } from '../../lib/time'
 import styles from './PlayerScreen.module.css'
 
 interface PlayerScreenProps {
+  /** A game id, or a channel id (`ch:…`). */
   gameId: string | null
   video0Ref: React.MutableRefObject<HTMLVideoElement | null>
   video1Ref: React.MutableRefObject<HTMLVideoElement | null>
@@ -44,7 +49,28 @@ export function PlayerScreen({
   onOpenDiagnostics,
 }: PlayerScreenProps): React.JSX.Element {
   const { games } = useGames()
-  const game = games.find((g) => g.gameId === gameId)
+  const { channels, programs } = useGuide()
+
+  // A channel id plays exactly like a game id; what differs is what we say
+  // about it. Resolve the channel and what it's showing from the guide.
+  const isChannel = gameId?.startsWith('ch:') ?? false
+  const guideNow = useNow(30_000)
+  const channelNow = useMemo<ChannelNow | undefined>(() => {
+    if (!isChannel || !gameId) return undefined
+    const liveGameIds = new Set(games.filter((g) => g.status === 'LIVE').map((g) => g.gameId))
+    const channel = channels.find((c) => c.channelId === gameId)
+    return {
+      name: channel?.name ?? 'Live channel',
+      channel,
+      now: onNow(programs, gameId, guideNow, liveGameIds),
+      next: nextProgram(programs, gameId, guideNow),
+      at: guideNow,
+    }
+  }, [isChannel, gameId, channels, programs, games, guideNow])
+
+  // On a channel, the game is whatever it's carrying right now (if we know it).
+  const gameKey = isChannel ? channelNow?.now?.gameId : gameId
+  const game = gameKey ? games.find((g) => g.gameId === gameKey) : undefined
   const playing = playerState === 'playing'
   const activeRef = slot0IsActive ? video0Ref : video1Ref
 
@@ -197,9 +223,17 @@ export function PlayerScreen({
 
   // --- Render ---------------------------------------------------------------
 
-  const title = game ? matchupLabel(game) : 'Game unavailable'
   const status = game ? (game.status === 'LIVE' || game.status === 'RECENTLY_ENDED' ? statusText(game) : formatKickoff(game.startTime)) : ''
-  const meta = game ? [status, game.network, leagueLabel(game.league)].filter(Boolean).join(' · ') : ''
+  let title: string
+  let meta: string
+  if (channelNow) {
+    title = channelNow.name
+    const on = channelNow.now
+    meta = on ? [`On now: ${on.title}`, game?.status === 'LIVE' ? status : null].filter(Boolean).join(' · ') : 'Live'
+  } else {
+    title = game ? matchupLabel(game) : 'Game unavailable'
+    meta = game ? [status, game.network, leagueLabel(game.league)].filter(Boolean).join(' · ') : ''
+  }
 
   return (
     <div className={`${styles.screen} ${isFullscreen ? styles.fullscreen : ''}`}>
@@ -225,11 +259,19 @@ export function PlayerScreen({
         {/* Catches double-clicks over the picture without covering the controls. */}
         {playing && <div className={styles.hitArea} onDoubleClick={toggleFullscreen} />}
 
-        {playerState === 'loading' && <LoadingState game={game} />}
+        {playerState === 'loading' && (
+          <LoadingState
+            game={game}
+            title={channelNow?.name}
+            art={channelNow && <ChannelMark name={channelNow.name} size={88} />}
+          />
+        )}
 
         {playerState === 'error' && (
           <AllSourcesFailed
             game={game}
+            title={channelNow?.name}
+            kind={channelNow ? 'channel' : 'game'}
             reason={errorReason}
             onRetry={onRetry}
             onPickSource={() => setDrawer(true)}
@@ -245,7 +287,7 @@ export function PlayerScreen({
         )}
 
         <div className={`${styles.chromeTop} ${chromeVisible ? styles.shown : ''} ${playing ? styles.scrim : ''}`}>
-          <button className={styles.back} onClick={onBack} aria-label="Back to games" title="Back (Esc)">
+          <button className={styles.back} onClick={onBack} aria-label={isChannel ? 'Back to guide' : 'Back to games'} title="Back (Esc)">
             <ChevronLeft size={20} strokeWidth={2.2} />
           </button>
           <div className={styles.titleBlock}>
@@ -277,6 +319,7 @@ export function PlayerScreen({
 
       <PlayerDrawer
         game={game}
+        channel={channelNow}
         open={drawerOpen}
         overlay={isFullscreen}
         stats={{

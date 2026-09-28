@@ -7,7 +7,7 @@
   z-index: var(--z-topbar);
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 24px;
   /* 88px clears the inset traffic lights. */
   padding: 0 24px 0 92px;
   -webkit-app-region: drag;
@@ -21,7 +21,8 @@
   box-shadow: 0 1px 0 var(--line);
 }
 
-.bar button {
+.bar button,
+.bar input {
   -webkit-app-region: no-drag;
 }
 
@@ -47,7 +48,38 @@
   box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.18), 0 0 14px var(--live-glow);
 }
 
+/* Primary navigation: plain words, weight and ink carry the state. The
+   segmented control beside it is the secondary filter. */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+}
+
+.navLink {
+  position: relative;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink-3);
+  transition: color var(--dur-2) var(--ease);
+}
+
+.navLink:hover {
+  color: var(--ink-2);
+}
+
+.navLinkOn,
+.navLinkOn:hover {
+  color: var(--ink);
+}
+
 .segments {
+  flex: none;
   position: relative;
   display: flex;
   gap: 2px;
@@ -103,6 +135,7 @@
 }
 
 .iconButton {
+  flex: none;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -127,4 +160,115 @@
 .iconButtonOn:hover {
   background: var(--ink);
   color: #0b0b0c;
+}
+
+/* Search */
+
+.search {
+  position: relative;
+  flex: 0 1 240px;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--glass);
+  box-shadow: var(--glass-hl), inset 0 0 0 1px var(--line);
+  -webkit-app-region: no-drag;
+  cursor: text;
+  transition: background var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+
+.search:hover {
+  background: var(--glass-hover);
+}
+
+.search:focus-within {
+  background: var(--glass-hover);
+  box-shadow: var(--glass-hl), inset 0 0 0 1px var(--line-strong), 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--ink-3);
+  pointer-events: none;
+  transition: color var(--dur-1) var(--ease);
+}
+
+.search:focus-within .searchIcon,
+.searchFilled .searchIcon {
+  color: var(--ink-2);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 32px 0 34px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.searchInput::placeholder {
+  color: var(--ink-3);
+}
+
+.searchInput:focus-visible {
+  outline: none;
+}
+
+.searchClear {
+  position: absolute;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.searchClear:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+/* Narrow windows: the wordmark gives way to its tally, and search folds into
+   a round button that opens while it has focus or a query. */
+@media (max-width: 1100px) {
+  .bar {
+    gap: 16px;
+  }
+
+  .brandWord {
+    display: none;
+  }
+
+  .search {
+    flex: 0 0 34px;
+    min-width: 34px;
+    transition: flex-basis var(--dur-2) var(--ease), background var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+  }
+
+  .search .searchIcon {
+    left: 9.5px;
+  }
+
+  .search:not(:focus-within):not(.searchFilled) .searchInput {
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .search:focus-within,
+  .searchFilled {
+    flex-basis: 170px;
+  }
 }

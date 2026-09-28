@@ -2,16 +2,23 @@ import React, { useRef, useState } from 'react'
 import { TopBar } from './components/TopBar/TopBar'
 import { HomeScreen } from './screens/HomeScreen/HomeScreen'
 import { PlayerScreen } from './screens/PlayerScreen/PlayerScreen'
+import { GuideScreen } from './screens/GuideScreen/GuideScreen'
 import { DiagnosticsScreen } from './screens/DiagnosticsScreen/DiagnosticsScreen'
 import { usePlayback } from './hooks/usePlayback'
+import type { GuideCategory } from './lib/guide'
 import styles from './App.module.css'
 
-export type Screen = 'home' | 'player' | 'diagnostics'
+export type Screen = 'home' | 'guide' | 'player' | 'diagnostics'
 
 export default function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('home')
   const [selectedLeague, setSelectedLeague] = useState<LeagueId | null>(null)
+  const [guideCategory, setGuideCategory] = useState<GuideCategory>('all')
+  const [guideQuery, setGuideQuery] = useState('')
+  /** A game id, or a channel id (`ch:…`) — both play through playGame. */
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null)
+  /** Where Back from the player returns: the guide when a channel was tuned from it. */
+  const [returnTo, setReturnTo] = useState<Screen>('home')
   const [scrolled, setScrolled] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
 
@@ -35,6 +42,7 @@ export default function App(): React.JSX.Element {
   }
 
   const handleGameClick = (gameId: string) => {
+    setReturnTo(screen === 'guide' ? 'guide' : 'home')
     setSelectedGameId(gameId)
     setScreen('player')
     playGame(gameId)
@@ -58,7 +66,7 @@ export default function App(): React.JSX.Element {
         activeCandidateId={activeCandidateId}
         liveLatency={liveLatency}
         onSelectCandidate={selectCandidate}
-        onBack={() => leavePlayer('home')}
+        onBack={() => leavePlayer(returnTo)}
         onOpenDiagnostics={() => leavePlayer('diagnostics')}
         onRetry={() => {
           if (selectedGameId) playGame(selectedGameId)
@@ -70,17 +78,21 @@ export default function App(): React.JSX.Element {
   return (
     <div className={styles.shell}>
       <TopBar
-        onDiagnostics={screen === 'diagnostics'}
+        screen={screen}
+        onNavigate={(next) => {
+          if (next === 'home') setSelectedLeague(null)
+          go(next)
+        }}
         league={selectedLeague}
         onLeague={(league) => {
           setSelectedLeague(league)
           go('home')
         }}
+        category={guideCategory}
+        onCategory={setGuideCategory}
+        query={guideQuery}
+        onQuery={setGuideQuery}
         onOpenDiagnostics={() => go('diagnostics')}
-        onHome={() => {
-          setSelectedLeague(null)
-          go('home')
-        }}
         scrolled={scrolled}
       />
       <main
@@ -89,6 +101,17 @@ export default function App(): React.JSX.Element {
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 8)}
       >
         {screen === 'home' && <HomeScreen selectedLeague={selectedLeague} onGameClick={handleGameClick} />}
+        {screen === 'guide' && (
+          <GuideScreen
+            category={guideCategory}
+            query={guideQuery}
+            onTune={handleGameClick}
+            onClearFilters={() => {
+              setGuideCategory('all')
+              setGuideQuery('')
+            }}
+          />
+        )}
         {screen === 'diagnostics' && <DiagnosticsScreen />}
       </main>
     </div>
