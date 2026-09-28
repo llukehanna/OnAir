@@ -26,6 +26,15 @@ const CONTEXT_OPTIONS = {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
+/** Options `_defaultBrowserFactory` passes to a chromium launcher. */
+export interface ChromiumLaunchOptions {
+  headless: true
+  channel?: string
+}
+
+/** The shape of `chromium.launch` — a seam so tests can inject a fake one without mocking the 'playwright' module. */
+export type ChromiumLauncher = (options: ChromiumLaunchOptions) => Promise<Browser>
+
 export class PlaywrightPool {
   private browser: Browser | null = null
 
@@ -36,14 +45,37 @@ export class PlaywrightPool {
   private activePages = new Set<Page>()
 
   private _browserFactory: () => Promise<Browser>
+  private _launchChromium: ChromiumLauncher
 
-  constructor(browserFactory?: () => Promise<Browser>) {
+  constructor(browserFactory?: () => Promise<Browser>, launchChromium?: ChromiumLauncher) {
     this._browserFactory = browserFactory ?? this._defaultBrowserFactory.bind(this)
+    this._launchChromium =
+      launchChromium ??
+      (async (options) => {
+        const { chromium } = await import('playwright')
+        return chromium.launch(options)
+      })
   }
 
   private async _defaultBrowserFactory(): Promise<Browser> {
-    const { chromium } = await import('playwright')
-    return chromium.launch({ headless: true })
+    try {
+      return await this._launchChromium({ headless: true })
+    } catch (err) {
+      // Playwright's bundled headless shell can be missing (not installed,
+      // or a stalled/interrupted `playwright install`) while a full Google
+      // Chrome is present locally. Fall back to it rather than failing every
+      // adapter that needs a page — but only for that specific cause; any
+      // other launch failure (bad args, sandbox denial, ...) should surface
+      // as-is rather than being masked by a confusing second attempt.
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes("Executable doesn't exist")) throw err
+
+      console.warn(
+        '[PlaywrightPool] bundled Chromium missing, falling back to the system Chrome install:',
+        message
+      )
+      return this._launchChromium({ headless: true, channel: 'chrome' })
+    }
   }
 
   private async getOrCreateBrowser(): Promise<Browser> {

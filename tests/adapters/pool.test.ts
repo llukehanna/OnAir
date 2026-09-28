@@ -1,5 +1,18 @@
+import type { Browser } from 'playwright'
 import { PlaywrightPool, AcquirePriority, POOL_CONFIG } from '../../src/main/adapters/pool'
 import { createMockPage, createMockBrowserFactory } from '../helpers/playwright-mock'
+
+function makeFakeBrowser(): Browser {
+  return {
+    newContext: jest.fn().mockImplementation(async () => ({
+      newPage: jest.fn().mockImplementation(async () => createMockPage()),
+      clearCookies: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
+    })),
+    close: jest.fn().mockResolvedValue(undefined),
+    contexts: jest.fn().mockReturnValue([]),
+  } as unknown as Browser
+}
 
 describe('PlaywrightPool', () => {
   let pool: PlaywrightPool
@@ -230,6 +243,37 @@ describe('PlaywrightPool', () => {
       expect(closeSpy).not.toHaveBeenCalled()
 
       pool.release(reacquired)
+    })
+  })
+
+  describe('default browser factory Chrome fallback', () => {
+    it('falls back to the system Chrome channel when the bundled executable is missing', async () => {
+      const fakeBrowser = makeFakeBrowser()
+      const launchChromium = jest
+        .fn()
+        .mockRejectedValueOnce(
+          new Error(
+            "browserType.launch: Executable doesn't exist at /Users/x/Library/Caches/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell"
+          )
+        )
+        .mockResolvedValueOnce(fakeBrowser)
+
+      pool = new PlaywrightPool(undefined, launchChromium)
+      const page = await pool.acquire('background')
+
+      expect(page).toBeDefined()
+      expect(launchChromium).toHaveBeenCalledTimes(2)
+      expect(launchChromium).toHaveBeenNthCalledWith(1, { headless: true })
+      expect(launchChromium).toHaveBeenNthCalledWith(2, { headless: true, channel: 'chrome' })
+    })
+
+    it('rethrows a launch failure unrelated to a missing executable, without a second attempt', async () => {
+      const launchChromium = jest.fn().mockRejectedValueOnce(new Error('spawn EACCES'))
+
+      pool = new PlaywrightPool(undefined, launchChromium)
+
+      await expect(pool.acquire('background')).rejects.toThrow('spawn EACCES')
+      expect(launchChromium).toHaveBeenCalledTimes(1)
     })
   })
 
