@@ -5,6 +5,7 @@ import {
   mergePrograms,
   fetchTvmaze,
   buildGuide,
+  resolveKnownChannelId,
   type TvmazeEpisode,
 } from '../../src/main/channels/listings'
 import type { Channel, Game, GuideProgram } from '../../src/main/types'
@@ -223,6 +224,40 @@ describe('mergePrograms', () => {
 })
 
 // ---------------------------------------------------------------------------
+// resolveKnownChannelId
+// ---------------------------------------------------------------------------
+
+describe('resolveKnownChannelId', () => {
+  it('resolves a "channel"-suffixed id to the known id with that suffix stripped', () => {
+    const known = new Set(['ch:foxnews'])
+    expect(resolveKnownChannelId('ch:foxnewschannel', known)).toBe('ch:foxnews')
+  })
+
+  it('resolves a bare id to the known id with a "network" suffix added', () => {
+    const known = new Set(['ch:foxbusinessnetwork'])
+    expect(resolveKnownChannelId('ch:foxbusiness', known)).toBe('ch:foxbusinessnetwork')
+  })
+
+  it('prefers an exact match over any suffix-tolerant one', () => {
+    const known = new Set(['ch:foxnews', 'ch:foxnewschannel'])
+    expect(resolveKnownChannelId('ch:foxnewschannel', known)).toBe('ch:foxnewschannel')
+  })
+
+  it('returns null when no exact or suffix-tolerant match exists', () => {
+    const known = new Set(['ch:cnn'])
+    expect(resolveKnownChannelId('ch:foxnewschannel', known)).toBeNull()
+  })
+
+  it('tolerates the "tv" suffix in either direction', () => {
+    const known = new Set(['ch:nba'])
+    expect(resolveKnownChannelId('ch:nbatv', known)).toBe('ch:nba')
+
+    const known2 = new Set(['ch:nbatv'])
+    expect(resolveKnownChannelId('ch:nba', known2)).toBe('ch:nbatv')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // fetchTvmaze
 // ---------------------------------------------------------------------------
 
@@ -302,6 +337,31 @@ describe('buildGuide', () => {
       expect(g.programs).toHaveLength(1)
       expect(g.programs[0].channelId).toBe('ch:nbc')
     })
+  })
+
+  it('resolves a program onto a suffix-tolerant known channel and keeps it', async () => {
+    // TVmaze reports "Fox News Channel" -> ch:foxnewschannel, but the only
+    // known channel (as a source actually spells it) is ch:foxnews. Without
+    // suffix-tolerant resolution this show would be dropped as "unknown
+    // channel" even though it's clearly the same network.
+    const now = Date.parse('2026-09-28T12:00:00Z')
+    const channels = [makeChannel('ch:foxnews', 'Fox News')]
+    const episode = makeEpisode({
+      airstamp: new Date(now).toISOString(),
+      show: { name: 'Some Show', network: { name: 'Fox News Channel' } },
+    })
+    // buildGuide fetches both today and tomorrow — only "today" should
+    // return the episode, or it'd land twice (once per date requested).
+    const todayStr = new Date(now).toISOString().slice(0, 10)
+    const fetchFn = jest.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (url.includes(todayStr) ? [episode] : []),
+    })) as unknown as typeof fetch
+
+    const guide = await buildGuide({ channels, games: [], fetchFn, now })
+
+    expect(guide.programs).toHaveLength(1)
+    expect(guide.programs[0].channelId).toBe('ch:foxnews')
   })
 
   it('excludes programs for unknown channels', async () => {
