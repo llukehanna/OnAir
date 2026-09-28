@@ -191,28 +191,84 @@ function localDateString(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+interface TvmazeDateResult {
+  ok: boolean
+  episodes: TvmazeEpisode[]
+}
+
+/** One date's request against TVmaze — success/failure kept distinct from
+ *  the flattened [] the public fetchers return, since the cache below needs
+ *  to tell "really no shows that day" apart from "the request failed". */
+async function fetchTvmazeForDate(date: string, fetchFn: typeof fetch): Promise<TvmazeDateResult> {
+  try {
+    const response = await fetchFn(`https://api.tvmaze.com/schedule?country=US&date=${date}`, {
+      signal: AbortSignal.timeout(TVMAZE_TIMEOUT_MS),
+    })
+    if (!response.ok) return { ok: false, episodes: [] }
+    const json = (await response.json()) as unknown
+    return { ok: true, episodes: Array.isArray(json) ? (json as TvmazeEpisode[]) : [] }
+  } catch {
+    return { ok: false, episodes: [] }
+  }
+}
+
+/** Shape shared by fetchTvmaze and fetchTvmazeCached, so buildGuide can take
+ *  either as its fetchTvmazeFn override. */
+export type TvmazeFetcher = (dates: string[], fetchFn?: typeof fetch, now?: number) => Promise<TvmazeEpisode[]>
+
 /**
  * Fetches TVmaze's US schedule for each date, 5s timeout apiece. A single
  * date's request failing (network error, timeout, non-2xx) yields [] for
  * that date only — it never throws, and never costs the other dates theirs.
+ * Always hits the network; see fetchTvmazeCached for the cached variant
+ * production wiring actually uses. `now` is accepted (unused) only so this
+ * has the same call shape as fetchTvmazeCached — see TvmazeFetcher.
  */
-export async function fetchTvmaze(dates: string[], fetchFn: typeof fetch = fetch): Promise<TvmazeEpisode[]> {
-  const perDate = await Promise.all(
+export const fetchTvmaze: TvmazeFetcher = async (dates, fetchFn = fetch) => {
+  const perDate = await Promise.all(dates.map((date) => fetchTvmazeForDate(date, fetchFn)))
+  return perDate.flatMap((r) => r.episodes)
+}
+
+const TVMAZE_CACHE_TTL_MS = 30 * 60_000
+
+interface TvmazeCacheEntry {
+  episodes: TvmazeEpisode[]
+  fetchedAt: number
+}
+
+/** One entry per date ('2026-09-28' etc.), so "today" and "tomorrow" expire independently. */
+const tvmazeCache = new Map<string, TvmazeCacheEntry>()
+
+/**
+ * Same contract as fetchTvmaze, but a date whose last successful fetch is
+ * still within the 30-minute TTL is served from cache instead of hitting
+ * TVmaze again. Without this, every games-updated, channels-updated, and the
+ * 30-minute guide timer — which can all fire within moments of each other —
+ * would each re-fetch TVmaze from scratch, when only the games/channels side
+ * of the guide actually needs re-merging most of the time.
+ *
+ * A failed fetch (network error, timeout, non-2xx) is deliberately never
+ * cached as if it were a real "no shows today" — the next caller retries it
+ * rather than the guide going quietly show-less for the rest of the TTL
+ * window over one transient failure.
+ */
+export const fetchTvmazeCached: TvmazeFetcher = async (dates, fetchFn = fetch, now = Date.now()) => {
+  const results = await Promise.all(
     dates.map(async (date): Promise<TvmazeEpisode[]> => {
-      try {
-        const response = await fetchFn(`https://api.tvmaze.com/schedule?country=US&date=${date}`, {
-          signal: AbortSignal.timeout(TVMAZE_TIMEOUT_MS),
-        })
-        if (!response.ok) return []
-        const json = (await response.json()) as unknown
-        return Array.isArray(json) ? (json as TvmazeEpisode[]) : []
-      } catch {
-        return []
-      }
+      const cached = tvmazeCache.get(date)
+      if (cached && now - cached.fetchedAt < TVMAZE_CACHE_TTL_MS) return cached.episodes
+
+      const result = await fetchTvmazeForDate(date, fetchFn)
+      if (result.ok) tvmazeCache.set(date, { episodes: result.episodes, fetchedAt: now })
+      return result.episodes
     })
   )
+  return results.flat()
+}
 
-  return perDate.flat()
+/** Test-only: clears the module-level TVmaze cache between cases. */
+export function __resetTvmazeCacheForTests(): void {
+  tvmazeCache.clear()
 }
 
 /**
@@ -226,13 +282,18 @@ export async function buildGuide(deps: {
   games: Game[]
   fetchFn?: typeof fetch
   now?: number
+  /** Defaults to the uncached fetchTvmaze, which is what every existing
+   *  test exercises. Production wiring (buildAndStoreGuide below) passes
+   *  fetchTvmazeCached instead. */
+  fetchTvmazeFn?: TvmazeFetcher
 }): Promise<GuideData> {
   const now = deps.now ?? Date.now()
   const today = new Date(now)
   const tomorrow = new Date(now + GUIDE_LOOKAHEAD_MS)
   const dates = [localDateString(today), localDateString(tomorrow)]
 
-  const episodes = await fetchTvmaze(dates, deps.fetchFn)
+  const fetchTvmazeFn = deps.fetchTvmazeFn ?? fetchTvmaze
+  const episodes = await fetchTvmazeFn(dates, deps.fetchFn, now)
 
   const knownChannelIds = new Set(deps.channels.map((c) => c.channelId))
 
@@ -248,4 +309,48 @@ export async function buildGuide(deps: {
   )
 
   return { channels: deps.channels, programs, generatedAt: now }
+}
+
+// ---------------------------------------------------------------------------
+// Shared "latest guide" store — the one place index.ts and ipc/handlers.ts
+// both go through, so they can't independently call buildGuide({channels,
+// games}) and race each other (I2). index.ts's refresh loop is the only
+// thing that proactively rebuilds; the 'get-guide' IPC handler just serves
+// whatever that loop last produced, building once itself only if nothing
+// has been built yet (e.g. a renderer asking before startup's first pass
+// completes).
+// ---------------------------------------------------------------------------
+
+let latestGuide: GuideData | null = null
+
+/** The most recently built guide, or null before the first one. */
+export function getLatestGuide(): GuideData | null {
+  return latestGuide
+}
+
+/** Builds a guide via the cached TVmaze fetch and records it as the latest. */
+export async function buildAndStoreGuide(deps: {
+  channels: Channel[]
+  games: Game[]
+  fetchFn?: typeof fetch
+  now?: number
+}): Promise<GuideData> {
+  const guide = await buildGuide({ ...deps, fetchTvmazeFn: fetchTvmazeCached })
+  latestGuide = guide
+  return guide
+}
+
+/** Returns the latest built guide, building (and storing) one now if none exists yet. */
+export async function getOrBuildGuide(deps: {
+  channels: Channel[]
+  games: Game[]
+  fetchFn?: typeof fetch
+  now?: number
+}): Promise<GuideData> {
+  return latestGuide ?? buildAndStoreGuide(deps)
+}
+
+/** Test-only: clears the stored latest guide. */
+export function __resetLatestGuideForTests(): void {
+  latestGuide = null
 }

@@ -14,7 +14,7 @@ import {
 import { registerHandlers } from './ipc/handlers'
 import { startDiscovery, stopDiscovery } from './discovery/scheduler'
 import { startChannelDiscovery, stopChannelDiscovery } from './channels/scheduler'
-import { buildGuide } from './channels/listings'
+import { buildAndStoreGuide } from './channels/listings'
 import { getChannels } from './db/queries/channels'
 import { getGames } from './db/queries/games'
 import { startWarmer, stopWarmer, onGamesUpdated } from './engine/warmer'
@@ -36,27 +36,29 @@ let guideIntervalHandle: ReturnType<typeof setInterval> | null = null
 // games-updated, every channels-updated, and a 30-min timer) which can fire
 // within milliseconds of each other — most obviously at startup, when all
 // three non-timer triggers fire almost together. Without coordination that
-// means several concurrent buildGuide() calls (each doing up to 2 TVmaze
-// GETs) racing each other, and — since nothing orders their completion —
-// an earlier-started, later-finishing call can push its now-stale guide
-// over a fresher one that resolved first.
+// means several concurrent buildAndStoreGuide() calls (each doing up to 2
+// TVmaze GETs, modulo its own 30-min cache) racing each other, and — since
+// nothing orders their completion — an earlier-started, later-finishing call
+// can push its now-stale guide over a fresher one that resolved first.
 //
 // guideRefreshInFlight/guideRefreshDirty turn every trigger into: run now if
 // idle, otherwise just mark dirty and return. The in-flight run, once done,
 // re-runs immediately if it was marked dirty meanwhile, and keeps doing so
 // until a run finishes with nothing new queued. That guarantees at most one
-// buildGuide() in flight at a time, and that the LAST trigger to arrive is
-// always the one whose data ends up pushed (never overwritten by an older
-// run finishing late).
+// buildAndStoreGuide() in flight at a time, and that the LAST trigger to
+// arrive is always the one whose data ends up pushed (never overwritten by
+// an older run finishing late).
 let guideRefreshInFlight = false
 let guideRefreshDirty = false
 
 /**
- * Rebuilds the guide and pushes it to the window, coalescing concurrent
- * triggers per the comment above. Never throws — buildGuide itself never
- * rejects (fetchTvmaze swallows its own failures), but this is the one
- * refresh that must not be allowed to take the app down regardless, since
- * it's also called from the games/channels update callbacks.
+ * Rebuilds the guide (via the shared store in channels/listings.ts, so
+ * 'get-guide' sees the same result without rebuilding itself) and pushes it
+ * to the window, coalescing concurrent triggers per the comment above. Never
+ * throws — buildGuide itself never rejects (fetchTvmaze swallows its own
+ * failures), but this is the one refresh that must not be allowed to take
+ * the app down regardless, since it's also called from the games/channels
+ * update callbacks.
  */
 async function refreshGuide(win: BrowserWindow): Promise<void> {
   if (guideRefreshInFlight) {
@@ -69,7 +71,7 @@ async function refreshGuide(win: BrowserWindow): Promise<void> {
     do {
       guideRefreshDirty = false
       try {
-        const guide = await buildGuide({ channels: getChannels(), games: getGames() })
+        const guide = await buildAndStoreGuide({ channels: getChannels(), games: getGames() })
         if (!win.isDestroyed()) win.webContents.send('guide-updated', guide)
       } catch (err) {
         console.warn('[guide] refresh failed:', err)

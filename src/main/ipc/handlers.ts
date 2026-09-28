@@ -10,7 +10,7 @@ import { getRecentEvents } from '../db/queries/events'
 import { getCacheEntries } from '../engine/cache'
 import { getChannels } from '../db/queries/channels'
 import { discoverOnce } from '../channels/scheduler'
-import { buildGuide } from '../channels/listings'
+import { getOrBuildGuide } from '../channels/listings'
 import { getAllAdapters } from '../adapters/registry'
 import type { PlaywrightPool } from '../adapters/pool'
 
@@ -34,12 +34,15 @@ export function registerHandlers(playbackManager: PlaybackManager, pool?: Playwr
     return discoverOnce(pool, getAllAdapters)
   })
 
-  // Guide: builds fresh rather than reading a cache, so a renderer that
-  // opens the guide before the next scheduled refresh still sees current
-  // data. buildGuide never throws (fetchTvmaze swallows its own failures),
-  // so no try/catch is needed here.
+  // Guide: serves the last guide index.ts's refresh loop built (shared via
+  // channels/listings.ts), building one now only if none exists yet — e.g. a
+  // renderer asking before startup's first refresh has completed. This is
+  // the one place that no longer independently calls buildGuide itself, so
+  // it can't race index.ts's own refresh and push a second, redundant
+  // TVmaze fetch. getOrBuildGuide never throws (buildGuide's fetchTvmaze
+  // swallows its own failures), so no try/catch is needed here.
   ipcMain.handle('get-guide', async (_event) => {
-    return buildGuide({ channels: getChannels(), games: getGames() })
+    return getOrBuildGuide({ channels: getChannels(), games: getGames() })
   })
 
   // Playback control
