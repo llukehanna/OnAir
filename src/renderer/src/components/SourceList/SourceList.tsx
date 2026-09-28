@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Check, LoaderCircle } from 'lucide-react'
+import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
 import styles from './SourceList.module.css'
 
 interface SourceListProps {
@@ -77,7 +77,7 @@ export function SourceList({ gameId, activeCandidateId, onSelect }: SourceListPr
               <span className={styles.name}>
                 {sourceName}
                 <span className={styles.meta}>
-                  {didFail ? <span className={styles.fail}>Couldn’t switch</span> : candidate.quality ?? 'Auto'}
+                  {didFail ? <span className={styles.fail}><CircleAlert size={11} strokeWidth={2.4} aria-hidden="true" />Couldn’t switch</span> : candidate.quality ?? 'Auto'}
                 </span>
               </span>
               <span className={styles.score} title="Reliability">

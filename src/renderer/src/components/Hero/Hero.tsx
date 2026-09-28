@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Play } from 'lucide-react'
+import { Clock3, Play } from 'lucide-react'
 import { TeamLogo } from '../TeamLogo/TeamLogo'
 import { TeamWash } from '../TeamWash/TeamWash'
 import { hasScore, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
@@ -89,6 +89,9 @@ export function Hero({ games, onWatch }: HeroProps): React.JSX.Element | null {
                   <span className={styles.liveDot} aria-hidden="true" />
                   <span className={styles.liveWord}>Live</span>
                 </>
+              )}
+              {!isLive && current.status !== 'RECENTLY_ENDED' && (
+                <Clock3 size={14} strokeWidth={2.2} className={styles.pillIcon} aria-hidden="true" />
               )}
               {pill}
             </div>

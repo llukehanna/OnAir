@@ -1,5 +1,18 @@
 import React from 'react'
-import { RotateCw } from 'lucide-react'
+import {
+  CalendarX,
+  KeyRound,
+  ListVideo,
+  MonitorX,
+  OctagonX,
+  RotateCw,
+  SearchX,
+  Timer,
+  TriangleAlert,
+  Unplug,
+  VideoOff,
+  type LucideIcon,
+} from 'lucide-react'
 import { TeamLogo } from '../TeamLogo/TeamLogo'
 import { TeamWash } from '../TeamWash/TeamWash'
 import { matchupLabel, teamOf } from '../../lib/teams'
@@ -81,6 +94,34 @@ function headingFor(reason: string | null | undefined): string {
   }
 }
 
+/** A glyph for the same reasons headingFor names, so the card reads at a glance. */
+function iconFor(reason: string | null | undefined): LucideIcon {
+  switch (reason) {
+    case 'all_sources_failed':
+    case 'all_probes_failed':
+      return OctagonX
+    case 'no_candidates':
+      return SearchX
+    case 'game_not_found':
+      return CalendarX
+    case 'token_expired':
+    case 'forbidden':
+      return KeyRound
+    case 'source_gone':
+      return Unplug
+    case 'timeout':
+      return Timer
+    case 'off_air':
+      return VideoOff
+    case 'media_error':
+    case 'hls_not_supported':
+    case 'no_video_element':
+      return MonitorX
+    default:
+      return TriangleAlert
+  }
+}
+
 export function AllSourcesFailed({
   game,
   onRetry,
@@ -89,11 +130,14 @@ export function AllSourcesFailed({
   onOpenDiagnostics,
   reason,
 }: AllSourcesFailedProps): React.JSX.Element {
+  const ReasonIcon = iconFor(reason)
   return (
     <div className={styles.overlay} role="alert">
       <TeamWash game={game} intensity={0.35} />
       <div className={styles.card}>
-        <span className={styles.errorDot} aria-hidden="true" />
+        <span className={styles.reasonIcon} aria-hidden="true">
+          <ReasonIcon size={22} strokeWidth={1.8} />
+        </span>
         <p className={styles.cardHeading}>{headingFor(reason)}</p>
         {game && <p className={styles.cardSub}>{matchupLabel(game)}</p>}
         <div className={styles.actions}>
@@ -101,7 +145,10 @@ export function AllSourcesFailed({
             <RotateCw size={15} strokeWidth={2.2} />
             Try again
           </button>
-          <button className={styles.secondary} onClick={onPickSource}>Pick a source</button>
+          <button className={styles.secondary} onClick={onPickSource}>
+            <ListVideo size={15} strokeWidth={2.2} />
+            Pick a source
+          </button>
         </div>
         <div className={styles.links}>
           <button className={styles.link} onClick={onBack}>Back to games</button>

@@ -1,5 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  Ban,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  CloudOff,
+  Dot,
+  HeartPulse,
+  Hourglass,
+  OctagonX,
+  Play,
+  Radar,
+  RefreshCw,
+  SearchX,
+  Timer,
+  TriangleAlert,
+  Unplug,
+  type LucideIcon,
+} from 'lucide-react'
 import { formatRelative } from '../../lib/time'
 import styles from './DiagnosticsScreen.module.css'
 
@@ -11,6 +30,29 @@ const HEALTH_LABEL: Record<HealthState, string> = {
   blocked: 'Blocked',
   broken: 'Broken',
   unknown: 'Not checked yet',
+}
+
+// A shape per state as well as a color, so health reads without color vision.
+const HEALTH_ICON: Record<HealthState, LucideIcon> = {
+  healthy: CircleCheck,
+  degraded: TriangleAlert,
+  blocked: Ban,
+  broken: CircleX,
+  unknown: CircleDashed,
+}
+
+/** One glyph per event type, so a long log can be scanned by shape. */
+const EVENT_ICON: Record<string, LucideIcon> = {
+  stream_started: Play,
+  stream_failed: Unplug,
+  buffer_stall: Hourglass,
+  source_switch: ArrowLeftRight,
+  probe_result: Radar,
+  all_sources_failed: OctagonX,
+  source_health_change: HeartPulse,
+  api_failure: CloudOff,
+  adapter_timeout: Timer,
+  extraction_failure: SearchX,
 }
 
 /** Event details are stored as a JSON string; anything unparseable shows nothing. */
@@ -83,36 +125,44 @@ export function DiagnosticsScreen(): React.JSX.Element {
         </button>
       </header>
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <p className={styles.error}>
+          <TriangleAlert size={15} strokeWidth={2} aria-hidden="true" />
+          {error}
+        </p>
+      )}
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Sources</h2>
         {data && sources.length === 0 && <p className={styles.empty}>No sources registered.</p>}
         <div className={styles.sources}>
-          {sources.map((s) => (
-            <article key={s.sourceId} className={`${styles.source} ${s.enabled ? '' : styles.disabled}`}>
-              <div className={styles.sourceTop}>
-                <h3 className={styles.sourceName}>{s.name}</h3>
-                <span className={`${styles.health} ${styles[`h_${s.healthState}`]}`}>
-                  <span className={styles.healthDot} aria-hidden="true" />
-                  {HEALTH_LABEL[s.healthState]}
-                </span>
-              </div>
-              <div className={styles.meter}>
-                <div className={styles.meterLabel}>
-                  <span>Confidence</span>
-                  <span className={styles.mono}>{Math.round(s.confidenceWeight * 100)}%</span>
+          {sources.map((s) => {
+            const HealthIcon = HEALTH_ICON[s.healthState]
+            return (
+              <article key={s.sourceId} className={`${styles.source} ${s.enabled ? '' : styles.disabled}`}>
+                <div className={styles.sourceTop}>
+                  <h3 className={styles.sourceName}>{s.name}</h3>
+                  <span className={`${styles.health} ${styles[`h_${s.healthState}`]}`}>
+                    <HealthIcon size={14} strokeWidth={2.2} aria-hidden="true" />
+                    {HEALTH_LABEL[s.healthState]}
+                  </span>
                 </div>
-                <div className={styles.track}>
-                  <span style={{ width: `${Math.round(s.confidenceWeight * 100)}%` }} />
+                <div className={styles.meter}>
+                  <div className={styles.meterLabel}>
+                    <span>Confidence</span>
+                    <span className={styles.mono}>{Math.round(s.confidenceWeight * 100)}%</span>
+                  </div>
+                  <div className={styles.track}>
+                    <span style={{ width: `${Math.round(s.confidenceWeight * 100)}%` }} />
+                  </div>
                 </div>
-              </div>
-              <div className={styles.sourceFoot}>
-                <span>{s.enabled ? 'Enabled' : 'Disabled'}</span>
-                <span className={styles.mono}>Checked {formatRelative(s.healthUpdatedAt)}</span>
-              </div>
-            </article>
-          ))}
+                <div className={styles.sourceFoot}>
+                  <span>{s.enabled ? 'Enabled' : 'Disabled'}</span>
+                  <span className={styles.mono}>Checked {formatRelative(s.healthUpdatedAt)}</span>
+                </div>
+              </article>
+            )
+          })}
         </div>
       </section>
 
@@ -122,9 +172,12 @@ export function DiagnosticsScreen(): React.JSX.Element {
         <ol className={styles.timeline}>
           {events.map((ev) => {
             const details = Object.entries(parseDetails(ev.details)).slice(0, 4)
+            const EventIcon = EVENT_ICON[ev.eventType] ?? Dot
             return (
               <li key={ev.id} className={`${styles.event} ${styles[`t_${toneOf(ev.eventType)}`]}`}>
-                <span className={styles.eventDot} aria-hidden="true" />
+                <span className={styles.eventIcon} aria-hidden="true">
+                  <EventIcon size={13} strokeWidth={2.2} />
+                </span>
                 <div className={styles.eventBody}>
                   <span className={styles.eventType}>{humanize(ev.eventType)}</span>
                   {details.length > 0 && (
