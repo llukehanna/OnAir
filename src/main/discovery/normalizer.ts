@@ -20,8 +20,14 @@ export interface EspnEvent {
   competitions: Array<{
     competitors: EspnCompetitor[]
     status: { type: { name: string; shortDetail?: string } }
-    broadcasts?: Array<{ names?: string[] }>
+    broadcasts?: Array<{ market?: string; names?: string[] }>
+    geoBroadcasts?: Array<{
+      market?: { type?: string }
+      type?: { shortName?: string }
+      media?: { shortName?: string }
+    }>
     venue?: { fullName?: string }
+    notes?: Array<{ headline?: string }>
   }>
 }
 
@@ -58,12 +64,25 @@ function normalizeEvent(event: EspnEvent, league: LeagueId): Game | null {
 
   const statusDetail = competition.status.type.shortDetail
   if (statusDetail) game.statusDetail = statusDetail
-  const network = competition.broadcasts?.[0]?.names?.[0]
+  const network = pickNetwork(competition)
   if (network) game.network = network
   const venue = competition.venue?.fullName
   if (venue) game.venue = venue
+  const headline = competition.notes?.[0]?.headline
+  if (headline) game.headline = headline
 
   return game
+}
+
+/**
+ * The network to show for a game: national TV first, then any TV, then the
+ * first name ESPN lists. The first listed name alone is often a streaming
+ * service (every MLB game leads with "MLB.TV"), which says nothing useful.
+ */
+function pickNetwork(competition: EspnEvent['competitions'][number]): string | undefined {
+  const tv = (competition.geoBroadcasts ?? []).filter((g) => g.type?.shortName === 'TV' && g.media?.shortName)
+  const national = tv.find((g) => g.market?.type === 'National')
+  return (national ?? tv[0])?.media?.shortName ?? competition.broadcasts?.[0]?.names?.[0]
 }
 
 /** ESPN colors are 6-hex without '#'. Anything else is treated as absent. */
@@ -94,8 +113,18 @@ export function mapStatus(espnStatus: string, startTime: number): GameStatus | n
       return 'LIVE'
     case 'STATUS_SCHEDULED':
       return (startTime - now < 60 * 60_000) ? 'STARTING_SOON' : 'SCHEDULED'
+    case 'STATUS_DELAYED':
+    case 'STATUS_RAIN_DELAY':
+      // Once first pitch has passed the broadcast is on air, showing the delay.
+      if (startTime <= now) return 'LIVE'
+      return (startTime - now < 60 * 60_000) ? 'STARTING_SOON' : 'SCHEDULED'
     case 'STATUS_FINAL':
       return (now - startTime < 3 * 60 * 60_000) ? 'RECENTLY_ENDED' : null
+    case 'STATUS_CANCELED':
+    case 'STATUS_POSTPONED':
+    case 'STATUS_SUSPENDED':
+      // Not happening at the listed time; showing it as upcoming would lie.
+      return null
     default:
       return 'SCHEDULED'
   }

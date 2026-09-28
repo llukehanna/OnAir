@@ -1,4 +1,4 @@
-export type LeagueId = 'nba' | 'nfl' | 'cbb' | 'cfb'
+export type LeagueId = 'nba' | 'nfl' | 'mlb' | 'cbb' | 'cfb'
 
 export type GameStatus = 'LIVE' | 'STARTING_SOON' | 'RECENTLY_ENDED' | 'SCHEDULED'
 
@@ -22,8 +22,9 @@ export interface Game {
   away?: TeamInfo
   home?: TeamInfo
   statusDetail?: string   // ESPN status.type.shortDetail, e.g. 'Q3 - 4:12', 'Halftime', 'Final'
-  network?: string        // first broadcast name, e.g. 'NBC'
+  network?: string        // TV network, national preferred, e.g. 'NBC'
   venue?: string
+  headline?: string       // ESPN's round note, e.g. 'NLWC - Game 1'
 }
 
 export type SourceClassification = 'event_first' | 'channel_first' | 'mixed_aggregator'

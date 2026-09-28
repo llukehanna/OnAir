@@ -42,7 +42,7 @@ describe('StubAdapter', () => {
   })
 
   it('supports all 4 leagues', () => {
-    expect(adapter.supportedLeagues).toEqual(['nba', 'nfl', 'cbb', 'cfb'])
+    expect(adapter.supportedLeagues).toEqual(['nba', 'nfl', 'mlb', 'cbb', 'cfb'])
   })
 
   it('has extractionMethod "html_parse"', () => {

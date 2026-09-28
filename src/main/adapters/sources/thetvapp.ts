@@ -20,7 +20,7 @@ function makeTvAppConfig(host: string, path: string, sourceId: string, name: str
     name,
     baseUrl: `https://${host}${path}`,
     classification: 'mixed_aggregator',
-    supportedLeagues: ['nba', 'nfl', 'cbb', 'cfb'] as LeagueId[],
+    supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'] as LeagueId[],
     confidenceWeight: 0.6,
     embedPlayerPatterns: [new RegExp(`${host.replace(/\./g, '\\.')}/(?:embed|player|watch|channel)`, 'i')],
   }

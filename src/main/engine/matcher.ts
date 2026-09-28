@@ -70,6 +70,41 @@ const NFL_ALIASES: Record<string, string[]> = {
   'Washington Commanders':  ['Commanders', 'WAS', 'Washington', 'Washington Football Team', 'Redskins'],
 }
 
+// Shared cities (Chicago, New York, Los Angeles) are deliberately absent: a
+// bare "Chicago" would match the Cubs and the White Sox alike.
+const MLB_ALIASES: Record<string, string[]> = {
+  'Arizona Diamondbacks':   ['Diamondbacks', 'D-backs', 'Dbacks', 'ARI', 'AZ', 'Arizona'],
+  'Athletics':              ['Athletics', 'ATH', 'OAK', 'Oakland Athletics', 'Oakland', 'Sacramento'],
+  'Atlanta Braves':         ['Braves', 'ATL', 'Atlanta'],
+  'Baltimore Orioles':      ['Orioles', 'BAL', 'Baltimore'],
+  'Boston Red Sox':         ['Red Sox', 'BOS', 'Boston'],
+  'Chicago Cubs':           ['Cubs', 'CHC'],
+  'Chicago White Sox':      ['White Sox', 'CHW', 'CWS'],
+  'Cincinnati Reds':        ['Reds', 'CIN', 'Cincinnati'],
+  'Cleveland Guardians':    ['Guardians', 'CLE', 'Cleveland'],
+  'Colorado Rockies':       ['Rockies', 'COL', 'Colorado'],
+  'Detroit Tigers':         ['Tigers', 'DET', 'Detroit'],
+  'Houston Astros':         ['Astros', 'HOU', 'Houston'],
+  'Kansas City Royals':     ['Royals', 'KC', 'KCR', 'Kansas City'],
+  'Los Angeles Angels':     ['Angels', 'LAA', 'LA Angels', 'Anaheim'],
+  'Los Angeles Dodgers':    ['Dodgers', 'LAD', 'LA Dodgers'],
+  'Miami Marlins':          ['Marlins', 'MIA', 'Miami'],
+  'Milwaukee Brewers':      ['Brewers', 'MIL', 'Milwaukee'],
+  'Minnesota Twins':        ['Twins', 'MIN', 'Minnesota'],
+  'New York Mets':          ['Mets', 'NYM', 'NY Mets'],
+  'New York Yankees':       ['Yankees', 'NYY', 'NY Yankees'],
+  'Philadelphia Phillies':  ['Phillies', 'PHI', 'Philadelphia'],
+  'Pittsburgh Pirates':     ['Pirates', 'PIT', 'Pittsburgh'],
+  'San Diego Padres':       ['Padres', 'SD', 'SDP', 'San Diego'],
+  'San Francisco Giants':   ['Giants', 'SF', 'SFG', 'San Francisco'],
+  'Seattle Mariners':       ['Mariners', 'SEA', 'Seattle'],
+  'St. Louis Cardinals':    ['Cardinals', 'STL', 'St. Louis', 'St Louis'],
+  'Tampa Bay Rays':         ['Rays', 'TB', 'TBR', 'Tampa Bay'],
+  'Texas Rangers':          ['Rangers', 'TEX', 'Texas'],
+  'Toronto Blue Jays':      ['Blue Jays', 'TOR', 'Toronto', 'Jays'],
+  'Washington Nationals':   ['Nationals', 'WSH', 'WAS', 'Washington', 'Nats'],
+}
+
 const CBB_ALIASES: Record<string, string[]> = {
   'Duke Blue Devils':           ['Duke', 'Blue Devils'],
   'Kentucky Wildcats':          ['Kentucky', 'Wildcats', 'UK'],
@@ -161,6 +196,7 @@ const CFB_ALIASES: Record<string, string[]> = {
 const ALIASES: Record<LeagueId, Record<string, string[]>> = {
   nba: NBA_ALIASES,
   nfl: NFL_ALIASES,
+  mlb: MLB_ALIASES,
   cbb: CBB_ALIASES,
   cfb: CFB_ALIASES,
 }
@@ -174,6 +210,11 @@ const AMBIGUOUS_NICKNAMES = new Set([
   'eagles', 'panthers', 'orange', 'volunteers', 'razorbacks',
   'commodores', 'rebels', 'cowboys', 'huskies', 'bruins',
 ])
+
+/** Lowercase words separated by single spaces; punctuation becomes a break. */
+function toWords(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
 
 // ─── matchTeam ────────────────────────────────────────────────────────────────
 
@@ -194,9 +235,13 @@ export function matchTeam(
   const aliases = ALIASES[league]?.[teamName] ?? []
   const candidates = [teamName, ...aliases]
 
+  // Whole words only: a bare substring test let 'NE' (Patriots) match
+  // "network" and 'NO' (Saints) match "north".
+  const text = ` ${toWords(normalizedText)} `
+
   for (const alias of candidates) {
-    const aliasLower = alias.toLowerCase()
-    if (!normalizedText.includes(aliasLower)) continue
+    const aliasLower = toWords(alias)
+    if (!aliasLower || !text.includes(` ${aliasLower} `)) continue
 
     // Match found — determine if it is a bare ambiguous nickname
     const isSingleWord = !aliasLower.includes(' ')

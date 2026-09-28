@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Clock3, Play } from 'lucide-react'
 import { TeamLogo } from '../TeamLogo/TeamLogo'
 import { TeamWash } from '../TeamWash/TeamWash'
-import { hasScore, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
+import { hasScore, headlineText, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
 import { countdown, formatClock, formatKickoff } from '../../lib/time'
 import styles from './Hero.module.css'
 
@@ -39,7 +39,7 @@ export function Hero({ games, onWatch }: HeroProps): React.JSX.Element | null {
   const lead = leader(current)
   const isLive = current.status === 'LIVE'
   const scored = hasScore(current) && current.status !== 'SCHEDULED' && current.status !== 'STARTING_SOON'
-  const meta = [leagueLabel(current.league), current.venue].filter(Boolean).join(' · ')
+  const meta = [leagueLabel(current.league), headlineText(current), current.venue].filter(Boolean).join(' · ')
 
   let pill: string
   if (isLive) pill = [statusText(current), current.network].filter(Boolean).join(' · ')

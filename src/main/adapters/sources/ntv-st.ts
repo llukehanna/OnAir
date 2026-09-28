@@ -17,7 +17,7 @@ export class NtvStAdapter extends InterceptAdapter {
       baseUrl: 'https://ntv.st/matches/kobra',
       // Matches pages list events per game, alongside 24/7 channels.
       classification: 'mixed_aggregator',
-      supportedLeagues: ['nba', 'nfl', 'cbb', 'cfb'],
+      supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'],
       confidenceWeight: 0.6,
       embedPlayerPatterns: [/ntv\.st\/(?:embed|player|watch)/i],
     })
