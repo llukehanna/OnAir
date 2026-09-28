@@ -14,7 +14,7 @@ mac:
     NSCameraUsageDescription: ''
     NSMicrophoneUsageDescription: ''
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
 win:
   target:
     - target: nsis
