@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 interface GuideContextValue {
   channels: Channel[]
@@ -20,7 +20,16 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // The initial getGuide() and a guide-updated push both land asynchronously
+  // and can resolve out of order (a push firing while getGuide() is still in
+  // flight resolves first, then getGuide()'s own — now stale — result lands
+  // after it). A ref survives across renders without retriggering the
+  // effect below the way a state variable used the same way would.
+  const latestGeneratedAt = useRef(0)
+
   const apply = useCallback((guide: GuideData) => {
+    if (guide.generatedAt < latestGeneratedAt.current) return
+    latestGeneratedAt.current = guide.generatedAt
     setChannels(guide.channels)
     setPrograms(guide.programs)
     setLoading(false)

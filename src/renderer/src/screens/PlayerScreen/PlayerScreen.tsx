@@ -11,7 +11,7 @@ import { FailoverToast } from '../../components/FailoverToast/FailoverToast'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { usePlayerMedia } from '../../hooks/usePlayerMedia'
 import { useNow } from '../../hooks/useNow'
-import { nextProgram, onNow } from '../../lib/guide'
+import { CHANNEL_ID_PREFIX, nextProgram, onNow } from '../../lib/guide'
 import { leagueLabel, matchupLabel, statusText } from '../../lib/teams'
 import { formatKickoff } from '../../lib/time'
 import styles from './PlayerScreen.module.css'
@@ -53,7 +53,7 @@ export function PlayerScreen({
 
   // A channel id plays exactly like a game id; what differs is what we say
   // about it. Resolve the channel and what it's showing from the guide.
-  const isChannel = gameId?.startsWith('ch:') ?? false
+  const isChannel = gameId?.startsWith(CHANNEL_ID_PREFIX) ?? false
   const guideNow = useNow(30_000)
   const channelNow = useMemo<ChannelNow | undefined>(() => {
     if (!isChannel || !gameId) return undefined
