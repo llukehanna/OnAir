@@ -114,6 +114,58 @@ describe('canonicalChannel', () => {
     expect(canonicalChannel('Red Zone')?.name).toBe('NFL RedZone')
     expect(canonicalChannel('BTN')?.name).toBe('Big Ten Network')
   })
+
+  // -------------------------------------------------------------------------
+  // Fix round 1: known multi-word names must be recognized BEFORE the
+  // drop-word step, so "usa"/"and" don't shred them the way a bare stopword
+  // pass would.
+  // -------------------------------------------------------------------------
+
+  it('keeps "USA Network" intact instead of dropping "usa" as a stopword', () => {
+    const result = canonicalChannel('USA Network')
+    expect(result).toEqual({ channelId: 'ch:usanetwork', name: 'USA Network', category: 'sports' })
+  })
+
+  it('keeps "USA Network" intact with trailing region/quality suffixes', () => {
+    const result = canonicalChannel('USA Network East HD')
+    expect(result?.name).toBe('USA Network')
+    expect(result?.channelId).toBe('ch:usanetwork')
+  })
+
+  it('recognizes "A&E" instead of mangling it via the blind & -> and expansion', () => {
+    const result = canonicalChannel('A&E')
+    expect(result).toEqual({ channelId: 'ch:ae', name: 'A&E', category: 'entertainment' })
+  })
+
+  it('recognizes "A&E USA" as A&E, dropping the trailing country suffix', () => {
+    const result = canonicalChannel('A&E USA')
+    expect(result?.name).toBe('A&E')
+    expect(result?.category).toBe('entertainment')
+  })
+
+  // -------------------------------------------------------------------------
+  // Fix round 1: display casing — any all-uppercase source token (letters/
+  // digits only, >=2 chars) keeps its uppercase, not just ones <=4 letters.
+  // -------------------------------------------------------------------------
+
+  it('keeps a 5+ letter all-caps source token uppercase (MSNBC)', () => {
+    const result = canonicalChannel('MSNBC')
+    expect(result?.name).toBe('MSNBC')
+    expect(result?.category).toBe('news')
+  })
+
+  it('keeps a single-token all-caps label uppercase (ESPNU) via the variant map', () => {
+    // ESPNU has no space, so it never hits the 'espn u' variant map entry —
+    // it must survive as a bare all-caps token instead.
+    const result = canonicalChannel('ESPNU')
+    expect(result?.name).toBe('ESPNU')
+    expect(result?.channelId).toBe('ch:espnu')
+    expect(result?.category).toBe('sports')
+  })
+
+  it('still title-cases the fixture adapter labels (not all-caps in the source)', () => {
+    expect(canonicalChannel('Fixture One HD')?.name).toBe('Fixture One')
+  })
 })
 
 // ---------------------------------------------------------------------------
