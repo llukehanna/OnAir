@@ -83,14 +83,17 @@
   animation: fade-up var(--dur-3) var(--ease) both;
 }
 
-.errorDot {
-  display: block;
-  width: 10px;
-  height: 10px;
-  margin: 0 auto 20px;
+/* Neutral on purpose: red means live and nothing else. */
+.reasonIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
   border-radius: 50%;
-  background: var(--ink-4);
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.05);
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 7px rgba(255, 255, 255, 0.03);
 }
 
 .cardHeading {

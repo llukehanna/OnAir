@@ -16,6 +16,9 @@
 }
 
 .banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   position: absolute;
   z-index: 2;
   top: calc(var(--topbar-h) + 8px);
