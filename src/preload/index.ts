@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('onair', {
   addSource: (source: unknown) => ipcRenderer.invoke('add-source', source),
   addSourcesBulk: (text: string) => ipcRenderer.invoke('add-sources-bulk', text),
 
+  // Channels + guide
+  getChannels: () => ipcRenderer.invoke('get-channels'),
+  refreshChannels: () => ipcRenderer.invoke('refresh-channels'),
+  getGuide: () => ipcRenderer.invoke('get-guide'),
+
   // Dev fixture controls — no-ops unless ONAIR_FIXTURE=1.
   fixtureSetMode: (mode: string) => ipcRenderer.invoke('fixture-set-mode', mode),
   fixtureStatus: () => ipcRenderer.invoke('fixture-status'),
@@ -39,6 +44,20 @@ contextBridge.exposeInMainWorld('onair', {
     ipcRenderer.on('playback-event', handler)
     return () => {
       ipcRenderer.removeListener('playback-event', handler)
+    }
+  },
+  onChannelsUpdated: (cb: (channels: unknown) => void) => {
+    const handler = (_: unknown, channels: unknown) => cb(channels)
+    ipcRenderer.on('channels-updated', handler)
+    return () => {
+      ipcRenderer.removeListener('channels-updated', handler)
+    }
+  },
+  onGuideUpdated: (cb: (guide: unknown) => void) => {
+    const handler = (_: unknown, guide: unknown) => cb(guide)
+    ipcRenderer.on('guide-updated', handler)
+    return () => {
+      ipcRenderer.removeListener('guide-updated', handler)
     }
   }
 })
