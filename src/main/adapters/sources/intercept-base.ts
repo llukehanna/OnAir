@@ -226,8 +226,13 @@ export class InterceptAdapter implements SourceAdapter {
 
       if (await isBlocked(page).catch(() => false)) return []
 
-      const anchors = await this.collectChannelAnchors(page)
       const patterns = channels.linkPatterns ?? DEFAULT_CHANNEL_LINK_PATTERNS
+      // The three configured sites render their channel cards client-side,
+      // after 'domcontentloaded' — scanning anchors immediately finds none.
+      // Give the page a bounded chance to render them first.
+      await this.waitForChannelAnchors(page, patterns)
+
+      const anchors = await this.collectChannelAnchors(page)
       return pickChannelLinks(anchors, patterns)
     } catch (err) {
       console.warn(`[${this.config.sourceId}] listChannels failed:`, err)
@@ -321,6 +326,39 @@ export class InterceptAdapter implements SourceAdapter {
       }
     }
     return best
+  }
+
+  /**
+   * Bounded wait for a client-rendered channel listing: streamsports99-ru,
+   * ntv-st and zlive-st all populate their channel cards via JS after the
+   * page's initial HTML lands, so scanning anchors right after
+   * 'domcontentloaded' finds nothing. Polls for at least one anchor whose
+   * pathname matches `patterns` (up to 5s), then gives the network a further
+   * chance to settle (up to another 5s) in case more cards are still
+   * loading in. Never throws, never blocks the pool slot past ~10s total —
+   * a source that never renders anything just falls through to an empty
+   * anchor list, same as before this wait existed.
+   */
+  protected async waitForChannelAnchors(page: Page, patterns: readonly RegExp[]): Promise<void> {
+    const pollDeadline = Date.now() + 5_000
+    while (Date.now() < pollDeadline) {
+      const hrefs = await page
+        .evaluate(() => Array.from(document.querySelectorAll('a[href]')).map((a) => (a as HTMLAnchorElement).href))
+        .catch(() => [] as string[])
+
+      const found = (hrefs ?? []).some((href) => {
+        try {
+          return patterns.some((p) => p.test(new URL(href).pathname))
+        } catch {
+          return false
+        }
+      })
+      if (found) break
+
+      await page.waitForTimeout(250).catch(() => {})
+    }
+
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {})
   }
 
   /**
