@@ -1,245 +1,151 @@
-/* Player Screen — 65/35 split layout */
-
-.container {
-  display: flex;
-  gap: var(--space-4);
-  height: 100%;
-  padding: var(--space-4);
-  box-sizing: border-box;
-}
-
-/* Fullscreen — overlay entire window including sidebar */
-.fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  padding: 0;
-  gap: 0;
-  background: #000;
-}
-
-/* Video Area — 65% */
-.videoArea {
-  flex: 0 0 65%;
+.screen {
   position: relative;
-  border-radius: var(--radius-xl);
+  display: flex;
+  height: 100vh;
+  background: #000;
   overflow: hidden;
-  background: var(--color-bg);
-  cursor: default;
 }
 
-/* Video area in fullscreen — fill entire screen */
-.videoAreaFullscreen {
-  flex: 1 1 100%;
-  border-radius: 0;
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
   background: #000;
+  overflow: hidden;
+}
+
+.idle {
+  cursor: none;
 }
 
 .video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  display: block;
+  background: #000;
 }
 
-/* Idle state overlay */
-.idleOverlay {
+.hitArea {
   position: absolute;
   inset: 0;
+}
+
+/* Top chrome: back, title, status. Also the window's drag handle. */
+.chromeTop {
+  position: absolute;
+  z-index: calc(var(--z-overlay) + 1);
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: var(--color-bg);
+  gap: 14px;
+  /* Clears the inset traffic lights. */
+  padding: 14px 24px 44px 88px;
+  -webkit-app-region: drag;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease), transform var(--dur-3) var(--ease);
 }
 
-.idleText {
-  font-size: var(--font-size-md);
-  color: var(--text-tertiary);
+.fullscreen .chromeTop {
+  padding-left: 24px;
 }
 
-/* Info Panel — 35% */
-.infoPanel {
-  flex: 0 0 35%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  overflow-y: auto;
+.scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
 }
 
-/* Glass card shared style */
-.glassCard {
-  background: var(--color-surface-1);
-  background-image: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.10) 0%,
-    rgba(255, 255, 255, 0.03) 40%,
-    rgba(255, 255, 255, 0.00) 100%
-  );
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid var(--glass-border);
-  border-bottom-color: var(--glass-border-subtle);
-  border-right-color: var(--glass-border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-4);
+
+.back {
+  -webkit-app-region: no-drag;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding-right: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
 
-/* League badge */
-.leagueBadge {
-  display: inline-block;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-2);
-  margin-bottom: var(--space-2);
+.back:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
-.league_nba {
-  color: var(--accent-nba);
-  background: rgba(255, 107, 0, 0.12);
+.back:active {
+  transform: scale(0.94);
 }
 
-.league_nfl {
-  color: var(--accent-nfl);
-  background: rgba(59, 130, 246, 0.12);
+.titleBlock {
+  min-width: 0;
 }
 
-.league_cbb {
-  color: var(--accent-cbb);
-  background: rgba(220, 38, 38, 0.12);
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.league_cfb {
-  color: var(--accent-cfb);
-  background: rgba(22, 163, 74, 0.12);
-}
-
-/* Game title */
-.gameTitle {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
-  margin: 0 0 var(--space-2) 0;
-  line-height: var(--line-height-tight);
-}
-
-/* Status row */
-.statusRow {
+.meta {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  gap: 7px;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.68);
+  white-space: nowrap;
 }
 
-.statusBadge {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.06em;
-  border-radius: var(--radius-pill);
-  padding: 2px var(--space-2);
-  text-transform: uppercase;
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--live);
 }
 
-.statusLive {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--status-live);
+/* Bottom chrome: transport controls over a scrim. */
+.chromeBottom {
+  position: absolute;
+  z-index: calc(var(--z-overlay) + 1);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 64px 18px 14px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease), transform var(--dur-3) var(--ease);
 }
 
-.statusSoon {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--status-soon);
+.chromeTop.shown,
+.chromeBottom.shown {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
-.statusEnded {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--status-ended);
+.idleState {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  font-size: 15px;
 }
 
-/* Not found placeholder */
-.notFoundText {
-  font-size: var(--font-size-md);
-  color: var(--text-tertiary);
-  margin: 0 0 var(--space-4) 0;
-}
-
-/* Back button */
-.backButton {
-  min-height: 44px;
-  min-width: 44px;
-  padding: var(--space-2) var(--space-4);
-  background: none;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-regular);
-  cursor: pointer;
-  transition: background var(--duration-base) var(--ease-out),
-    color var(--duration-base) var(--ease-out);
-}
-
-.backButton:hover {
-  background: var(--color-surface-2);
-  color: var(--text-primary);
-}
-
-.backButton:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 2px;
-}
-
-/* Stream info section */
-.sectionLabel {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 var(--space-2) 0;
-}
-
-.infoRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-1) 0;
-}
-
-.infoLabel {
-  font-size: var(--font-size-md);
-  color: var(--text-secondary);
-}
-
-.infoValue {
-  font-size: var(--font-size-md);
-  color: var(--text-primary);
-}
-
-/* Switch source button (shown when no gameId) */
-.switchSourceButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-surface-2);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-regular);
-  color: var(--text-primary);
-  cursor: pointer;
-  min-height: 44px;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.switchSourceButton:hover {
-  background: var(--color-surface-3);
-}
-
-.switchSourceButton:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 2px;
+.noGame {
+  font-size: 13px;
+  color: var(--ink-3);
 }

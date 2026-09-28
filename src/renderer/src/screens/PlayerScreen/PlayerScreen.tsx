@@ -1,10 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { useGames } from '../../context/GamesContext'
 import { LoadingState, AllSourcesFailed } from '../../components/LoadingState/LoadingState'
 import { PlayerControls } from '../../components/PlayerControls/PlayerControls'
-import { SourceSwitcher } from '../../components/SourceSwitcher/SourceSwitcher'
+import { PlayerDrawer } from '../../components/PlayerDrawer/PlayerDrawer'
+import { SourceList } from '../../components/SourceList/SourceList'
 import { FailoverToast } from '../../components/FailoverToast/FailoverToast'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { usePlayerMedia } from '../../hooks/usePlayerMedia'
+import { leagueLabel, matchupLabel, statusText } from '../../lib/teams'
+import { formatKickoff } from '../../lib/time'
 import styles from './PlayerScreen.module.css'
 
 interface PlayerScreenProps {
@@ -19,7 +24,10 @@ interface PlayerScreenProps {
   onSelectCandidate: (candidateId: string) => Promise<boolean>
   onBack: () => void
   onRetry: () => void
+  onOpenDiagnostics: () => void
 }
+
+const IDLE_HIDE_MS = 3000
 
 export function PlayerScreen({
   gameId,
@@ -33,9 +41,16 @@ export function PlayerScreen({
   onSelectCandidate,
   onBack,
   onRetry,
+  onOpenDiagnostics,
 }: PlayerScreenProps): React.JSX.Element {
   const { games } = useGames()
   const game = games.find((g) => g.gameId === gameId)
+  const playing = playerState === 'playing'
+  const activeRef = slot0IsActive ? video0Ref : video1Ref
+
+  const media = usePlayerMedia({ video0Ref, video1Ref, activeRef, liveLatency, streamKey: activeCandidateId })
+
+  // --- Stream facts for the drawer -------------------------------------------
 
   // Resolve the on-screen candidate to something a person can read. Candidates
   // and source names both live in main, so re-fetch whenever the stream changes.
@@ -64,67 +79,152 @@ export function PlayerScreen({
     }
   }, [gameId, activeCandidateId])
 
-  const [sourcePickerOpen, setSourcePickerOpen] = useState(false)
-  const [controlsVisible, setControlsVisible] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const mouseMoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Keyboard shortcuts — active when playing
-  useKeyboardShortcuts({
-    videoRef: slot0IsActive ? video0Ref : video1Ref,
-    enabled: playerState === 'playing',
-  })
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(prev => !prev)
-  }
-
-  // Keyboard shortcuts: Escape exits fullscreen (or goes back), F toggles fullscreen
+  // Time on air counts from the first frame and survives failovers.
+  const onAirSince = useRef<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isFullscreen) setIsFullscreen(false)
-        else onBack()
-      }
-      if (e.key === 'f' || e.key === 'F') {
-        if (playerState === 'playing') toggleFullscreen()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onBack, isFullscreen, playerState])
+    onAirSince.current = null
+  }, [gameId])
+  if (playing && onAirSince.current === null) onAirSince.current = Date.now()
+  useEffect(() => {
+    if (!playing) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [playing])
+  const onAirSec = onAirSince.current ? (now - onAirSince.current) / 1000 : 0
 
-  const handleVideoAreaMouseMove = () => {
-    setControlsVisible(true)
-    if (mouseMoveTimerRef.current) clearTimeout(mouseMoveTimerRef.current)
-    mouseMoveTimerRef.current = setTimeout(() => setControlsVisible(false), 3000)
-  }
+  const [failovers, setFailovers] = useState(0)
+  useEffect(() => {
+    setFailovers(0)
+    return window.onair.onPlaybackEvent((event) => {
+      if (event.type === 'source_switch' && event.gameId === gameId && event.details?.reason !== 'user_selected') {
+        setFailovers((n) => n + 1)
+      }
+    })
+  }, [gameId])
+
+  // --- Drawer and fullscreen ------------------------------------------------
+
+  const [drawerOpen, setDrawerOpen] = useState(() => localStorage.getItem('onair.drawer') !== 'closed')
+  const setDrawer = useCallback((open: boolean) => {
+    setDrawerOpen(open)
+    localStorage.setItem('onair.drawer', open ? 'open' : 'closed')
+  }, [])
+
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement)
+  const exitedAt = useRef(0)
+  useEffect(() => {
+    const onChange = () => {
+      const fs = !!document.fullscreenElement
+      if (!fs) exitedAt.current = Date.now()
+      setIsFullscreen(fs)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  // Leaving the player shouldn't leave the window stuck in fullscreen.
+  useEffect(() => () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    else document.documentElement.requestFullscreen().catch(() => {})
+  }, [])
+
+  // --- Chrome visibility ----------------------------------------------------
+
+  const [active, setActive] = useState(true)
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wake = useCallback(() => {
+    setActive(true)
+    if (idleTimer.current) clearTimeout(idleTimer.current)
+    idleTimer.current = setTimeout(() => setActive(false), IDLE_HIDE_MS)
+  }, [])
+  useEffect(() => {
+    wake()
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+    }
+  }, [wake])
+  // Chrome stays up whenever there is no picture to look at, or it's paused.
+  const chromeVisible = active || !playing || media.paused
+
+  // --- Keyboard -------------------------------------------------------------
+
+  useKeyboardShortcuts({ videoRef: activeRef, enabled: playing })
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      switch (e.key) {
+        case 'Escape':
+          if (document.fullscreenElement) {
+            e.preventDefault()
+            document.exitFullscreen().catch(() => {})
+          } else if (Date.now() - exitedAt.current > 400) {
+            // The same Escape that just left fullscreen must not also leave the player.
+            onBack()
+          }
+          break
+        case 'f':
+        case 'F':
+          if (playing) {
+            e.preventDefault()
+            toggleFullscreen()
+          }
+          break
+        case 'r':
+        case 'R':
+          e.preventDefault()
+          setDrawer(!drawerOpen)
+          break
+        case 'm':
+        case 'M':
+          e.preventDefault()
+          media.toggleMute()
+          break
+        default:
+          return
+      }
+      wake()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onBack, playing, toggleFullscreen, drawerOpen, setDrawer, media, wake])
+
+  // --- Render ---------------------------------------------------------------
+
+  const title = game ? matchupLabel(game) : 'Game unavailable'
+  const status = game ? (game.status === 'LIVE' || game.status === 'RECENTLY_ENDED' ? statusText(game) : formatKickoff(game.startTime)) : ''
+  const meta = game ? [status, game.network, leagueLabel(game.league)].filter(Boolean).join(' · ') : ''
 
   return (
-    <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
-      {/* Video Area — 65% normally, 100% in fullscreen */}
+    <div className={`${styles.screen} ${isFullscreen ? styles.fullscreen : ''}`}>
       <div
-        className={`${styles.videoArea} ${isFullscreen ? styles.videoAreaFullscreen : ''}`}
-        onMouseMove={handleVideoAreaMouseMove}
-        onDoubleClick={() => { if (playerState === 'playing') toggleFullscreen() }}
+        className={`${styles.stage} ${chromeVisible ? '' : styles.idle}`}
+        onMouseMove={wake}
+        onMouseDown={wake}
       >
-        {/* Slot 0 — visible when playing and slot 0 is the active slot */}
+        {/* Both slots stay mounted; usePlayback swaps which one is visible. */}
         <video
           ref={video0Ref}
           className={styles.video}
-          style={{ display: playerState === 'playing' && slot0IsActive ? 'block' : 'none' }}
+          style={{ display: playing && slot0IsActive ? 'block' : 'none' }}
           playsInline
         />
-
-        {/* Slot 1 — visible when playing and slot 1 is the active slot */}
         <video
           ref={video1Ref}
           className={styles.video}
-          style={{ display: playerState === 'playing' && !slot0IsActive ? 'block' : 'none' }}
+          style={{ display: playing && !slot0IsActive ? 'block' : 'none' }}
           playsInline
         />
 
-        {/* State overlays */}
+        {/* Catches double-clicks over the picture without covering the controls. */}
+        {playing && <div className={styles.hitArea} onDoubleClick={toggleFullscreen} />}
+
         {playerState === 'loading' && <LoadingState game={game} />}
 
         {playerState === 'error' && (
@@ -132,119 +232,68 @@ export function PlayerScreen({
             game={game}
             reason={errorReason}
             onRetry={onRetry}
-            onPickSource={() => setSourcePickerOpen(true)}
+            onPickSource={() => setDrawer(true)}
             onBack={onBack}
+            onOpenDiagnostics={onOpenDiagnostics}
           />
         )}
 
         {playerState === 'idle' && (
-          <div className={styles.idleOverlay}>
-            <span className={styles.idleText}>Select a game to start watching</span>
+          <div className={styles.idleState}>
+            <p>Pick a game to start watching.</p>
           </div>
         )}
 
-        {/* PlayerControls overlay */}
-        {playerState === 'playing' && (
-          <PlayerControls
-            videoRef={slot0IsActive ? video0Ref : video1Ref}
-            gameTitle={game ? `${game.teamAway} vs ${game.teamHome}` : ''}
-            gameClock={game?.status === 'LIVE' ? 'LIVE' : ''}
-            visible={controlsVisible}
-          />
-        )}
-      </div>
-
-      {/* Info Panel — 35%, hidden in fullscreen */}
-      <div className={styles.infoPanel} style={{ display: isFullscreen ? 'none' : undefined }}>
-        {/* Game title section */}
-        <div className={styles.glassCard}>
-          {game ? (
-            <>
-              <div className={`${styles.leagueBadge} ${styles[`league_${game.league}`]}`}>
-                {game.league.toUpperCase()}
-              </div>
-              <h1 className={styles.gameTitle}>
-                {game.teamAway} vs {game.teamHome}
-              </h1>
-              <div className={styles.statusRow}>
-                <span
-                  className={`${styles.statusBadge} ${
-                    game.status === 'LIVE'
-                      ? styles.statusLive
-                      : game.status === 'STARTING_SOON'
-                        ? styles.statusSoon
-                        : styles.statusEnded
-                  }`}
-                >
-                  {game.status === 'LIVE'
-                    ? 'LIVE'
-                    : game.status === 'STARTING_SOON'
-                      ? 'SOON'
-                      : game.status === 'RECENTLY_ENDED'
-                        ? 'FINAL'
-                        : 'SCHEDULED'}
-                </span>
-              </div>
-            </>
-          ) : (
-            <p className={styles.notFoundText}>Game not found</p>
-          )}
-
-          {/* Back button */}
-          <button className={styles.backButton} onClick={onBack} aria-label="Back to home">
-            &larr; Back
+        <div className={`${styles.chromeTop} ${chromeVisible ? styles.shown : ''} ${playing ? styles.scrim : ''}`}>
+          <button className={styles.back} onClick={onBack} aria-label="Back to games" title="Back (Esc)">
+            <ChevronLeft size={20} strokeWidth={2.2} />
           </button>
-        </div>
-
-        {/* Stream info section */}
-        <div className={styles.glassCard}>
-          <p className={styles.sectionLabel}>Stream Info</p>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>Source</span>
-            <span className={styles.infoValue}>{streamInfo?.source ?? '—'}</span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>Quality</span>
-            <span className={styles.infoValue}>{streamInfo?.quality ?? '—'}</span>
-          </div>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>Behind live</span>
-            <span className={styles.infoValue}>
-              {liveLatency !== null ? `${liveLatency.toFixed(1)}s` : '—'}
-            </span>
+          <div className={styles.titleBlock}>
+            <h1 className={styles.title}>{title}</h1>
+            {meta && (
+              <p className={styles.meta}>
+                {game?.status === 'LIVE' && <span className={styles.liveDot} aria-hidden="true" />}
+                {meta}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* SourceSwitcher — inline panel */}
-        {gameId && (
-          <div className={styles.glassCard}>
-            <SourceSwitcher
-              gameId={gameId}
-              open={sourcePickerOpen}
-              activeCandidateId={activeCandidateId}
-              onOpen={() => setSourcePickerOpen(true)}
-              onClose={() => setSourcePickerOpen(false)}
-              onSelect={onSelectCandidate}
+        {playing && (
+          <div className={`${styles.chromeBottom} ${chromeVisible ? styles.shown : ''}`}>
+            <PlayerControls
+              media={media}
+              liveLatency={liveLatency}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              drawerOpen={drawerOpen}
+              onToggleDrawer={() => setDrawer(!drawerOpen)}
             />
           </div>
         )}
 
-        {/* Open source switcher button — visible when no gameId-based card is shown */}
-        {!gameId && (
-          <div className={styles.glassCard}>
-            <button
-              className={styles.switchSourceButton}
-              onClick={() => setSourcePickerOpen(!sourcePickerOpen)}
-              aria-label="Switch stream source"
-            >
-              ⇄ Switch Source
-            </button>
-          </div>
-        )}
+        <FailoverToast />
       </div>
 
-      {/* FailoverToast — fixed position, manages its own placement */}
-      <FailoverToast />
+      <PlayerDrawer
+        game={game}
+        open={drawerOpen}
+        overlay={isFullscreen}
+        stats={{
+          source: playing ? streamInfo?.source ?? null : null,
+          quality: playing ? streamInfo?.quality ?? null : null,
+          // Nothing is on air while loading or failed; don't show a stale stream.
+          latency: playing ? liveLatency : null,
+          onAirSec: playing ? onAirSec : 0,
+          failovers,
+        }}
+      >
+        {gameId ? (
+          <SourceList gameId={gameId} activeCandidateId={playing ? activeCandidateId : null} onSelect={onSelectCandidate} />
+        ) : (
+          <p className={styles.noGame}>No game selected.</p>
+        )}
+      </PlayerDrawer>
     </div>
   )
 }

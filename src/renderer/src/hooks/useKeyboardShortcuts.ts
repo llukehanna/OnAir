@@ -5,6 +5,10 @@ interface KeyboardShortcutOptions {
   enabled: boolean // only active when Player screen is showing
 }
 
+/**
+ * Transport keys for the active video. Fullscreen, mute, the details drawer and
+ * Escape belong to PlayerScreen, which owns that state.
+ */
 export function useKeyboardShortcuts({ videoRef, enabled }: KeyboardShortcutOptions): void {
   useEffect(() => {
     if (!enabled) return
@@ -23,18 +27,6 @@ export function useKeyboardShortcuts({ videoRef, enabled }: KeyboardShortcutOpti
           if (video.paused) video.play().catch(() => {})
           else video.pause()
           break
-        case 'f':
-        case 'F':
-          e.preventDefault()
-          if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-          else document.documentElement.requestFullscreen().catch(() => {})
-          break
-        case 'm':
-        case 'M':
-          e.preventDefault()
-          video.muted = !video.muted
-          localStorage.setItem('onair.muted', String(video.muted))
-          break
         case 'ArrowLeft':
           e.preventDefault()
           video.currentTime = Math.max(0, video.currentTime - 10)
@@ -42,12 +34,6 @@ export function useKeyboardShortcuts({ videoRef, enabled }: KeyboardShortcutOpti
         case 'ArrowRight':
           e.preventDefault()
           video.currentTime = Math.min(video.duration || 0, video.currentTime + 10)
-          break
-        case 'Escape':
-          if (document.fullscreenElement) {
-            e.preventDefault()
-            document.exitFullscreen().catch(() => {})
-          }
           break
       }
     }

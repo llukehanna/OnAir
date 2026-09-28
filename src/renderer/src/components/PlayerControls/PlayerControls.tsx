@@ -1,131 +1,83 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Volume2, VolumeX, Maximize2, Minimize2 } from 'lucide-react'
+import React from 'react'
+import { Maximize, Minimize, Pause, Play, PanelRight, Volume1, Volume2, VolumeX } from 'lucide-react'
+import type { PlayerMedia } from '../../hooks/usePlayerMedia'
 import styles from './PlayerControls.module.css'
 
 interface PlayerControlsProps {
-  videoRef: React.MutableRefObject<HTMLVideoElement | null>
-  gameTitle: string
-  gameClock: string
-  visible: boolean
+  media: PlayerMedia
+  liveLatency: number | null
+  isFullscreen: boolean
+  onToggleFullscreen: () => void
+  drawerOpen: boolean
+  onToggleDrawer: () => void
 }
 
 export function PlayerControls({
-  videoRef,
-  gameTitle,
-  gameClock,
-  visible,
+  media,
+  liveLatency,
+  isFullscreen,
+  onToggleFullscreen,
+  drawerOpen,
+  onToggleDrawer,
 }: PlayerControlsProps): React.JSX.Element {
-  const [volume, setVolume] = useState<number>(() => {
-    const stored = localStorage.getItem('onair.volume')
-    if (stored === null) return 0.8
-    const parsed = parseFloat(stored)
-    return isNaN(parsed) ? 0.8 : parsed
-  })
-
-  const [muted, setMuted] = useState<boolean>(() => {
-    return localStorage.getItem('onair.muted') === 'true'
-  })
-
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const prevVideoRef = useRef<HTMLVideoElement | null>(null)
-
-  // Sync volume and mute to video element whenever the ref changes (important for dual-video swap)
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    if (video === prevVideoRef.current) return
-
-    video.volume = volume
-    video.muted = muted
-    prevVideoRef.current = video
-  })
-
-  // Also sync on volume/mute state changes
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    video.volume = volume
-    video.muted = muted
-  }, [volume, muted, videoRef])
-
-  // Track fullscreen state
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
-    }
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [])
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value)
-    setVolume(newVolume)
-    localStorage.setItem('onair.volume', String(newVolume))
-  }
-
-  const handleMuteToggle = () => {
-    const newMuted = !muted
-    setMuted(newMuted)
-    localStorage.setItem('onair.muted', String(newMuted))
-  }
-
-  const handleFullscreenToggle = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {})
-    } else {
-      document.documentElement.requestFullscreen().catch(() => {})
-    }
-  }
+  const { volume, muted, paused, behindBy } = media
+  const atEdge = behindBy === 0 && !paused
+  const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
+  const fill = `${Math.round((muted ? 0 : volume) * 100)}%`
 
   return (
-    <div
-      className={styles.controls}
-      style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}
-    >
-      {/* Volume slider */}
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={volume}
-        onChange={handleVolumeChange}
-        className={styles.volumeSlider}
-        aria-label="Volume"
-      />
-
-      {/* Mute button */}
-      <button
-        className={styles.iconButton}
-        onClick={handleMuteToggle}
-        aria-label={muted ? 'Unmute' : 'Mute'}
-      >
-        {muted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+    <div className={styles.controls}>
+      <button className={styles.icon} onClick={media.togglePause} aria-label={paused ? 'Play' : 'Pause'} title={paused ? 'Play (Space)' : 'Pause (Space)'}>
+        {paused ? <Play size={20} fill="currentColor" strokeWidth={0} /> : <Pause size={20} fill="currentColor" strokeWidth={0} />}
       </button>
 
-      {/* Spacer */}
-      <div className={styles.spacer} />
+      <div className={styles.volume}>
+        <button className={styles.icon} onClick={media.toggleMute} aria-label={muted ? 'Unmute' : 'Mute'} title="Mute (M)">
+          <VolumeIcon size={20} strokeWidth={1.9} />
+        </button>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={muted ? 0 : volume}
+          onChange={(e) => media.setVolume(parseFloat(e.target.value))}
+          className={styles.slider}
+          style={{ '--fill': fill } as React.CSSProperties}
+          aria-label="Volume"
+        />
+      </div>
 
-      {/* Game title */}
-      {gameTitle && (
-        <span className={styles.gameTitle}>{gameTitle}</span>
-      )}
-
-      {/* Game clock */}
-      {gameClock && (
-        <span className={styles.gameClock}>{gameClock}</span>
-      )}
-
-      {/* Spacer */}
-      <div className={styles.spacer} />
-
-      {/* Fullscreen button */}
       <button
-        className={styles.iconButton}
-        onClick={handleFullscreenToggle}
-        aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        className={`${styles.live} ${atEdge ? styles.liveOn : ''}`}
+        onClick={media.goLive}
+        disabled={atEdge}
+        aria-label={atEdge ? 'At live' : 'Jump to live'}
+        title={atEdge ? undefined : 'Jump to live'}
       >
-        {isFullscreen ? <Minimize2 size={24} /> : <Maximize2 size={24} />}
+        <span className={styles.liveDot} aria-hidden="true" />
+        {atEdge ? 'LIVE' : 'GO LIVE'}
+      </button>
+
+      {liveLatency !== null && (
+        <span className={styles.latency} title="How far this stream runs behind the live broadcast">
+          {liveLatency.toFixed(1)}s behind
+        </span>
+      )}
+
+      <div className={styles.spacer} />
+
+      <button
+        className={`${styles.icon} ${drawerOpen ? styles.iconOn : ''}`}
+        onClick={onToggleDrawer}
+        aria-label={drawerOpen ? 'Hide details' : 'Show details'}
+        aria-pressed={drawerOpen}
+        title="Details (R)"
+      >
+        <PanelRight size={19} strokeWidth={1.9} />
+      </button>
+      <button className={styles.icon} onClick={onToggleFullscreen} aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'} title="Full screen (F)">
+        {isFullscreen ? <Minimize size={19} strokeWidth={1.9} /> : <Maximize size={19} strokeWidth={1.9} />}
       </button>
     </div>
   )
