@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OnAir Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet" />
+<style>
+  :root { --page: #0e0d0c; --page-ink: #e9e4dc; --page-mute: #8f8980; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--page); color: var(--page-ink); font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  img { display: block; }
+
+  /* ---------- page chrome ---------- */
+  .page { max-width: 1340px; margin: 0 auto; padding: 28px 16px 80px; }
+  .page-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+  .page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .page-head p { color: var(--page-mute); font-size: 13px; margin-top: 4px; max-width: 640px; line-height: 1.5; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #ffffff0a; border: 1px solid #ffffff14; }
+  .tabs button { padding: 8px 14px; border-radius: 8px; font-size: 13px; color: var(--page-mute); transition: background .2s, color .2s; }
+  .tabs button[aria-selected="true"] { background: #ffffff14; color: var(--page-ink); }
+  .tabs .k { font-family: 'Geist Mono', monospace; font-size: 11px; opacity: .6; margin-right: 6px; }
+  .blurb { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 0 0 18px; font-size: 13px; color: var(--page-mute); line-height: 1.55; max-width: 820px; }
+  .blurb b { color: var(--page-ink); font-weight: 500; }
+  .label { font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--page-mute); margin: 26px 0 10px; }
+  .stage { width: 100%; overflow: hidden; }
+  .frame { width: 1280px; height: 800px; position: relative; overflow: hidden; border-radius: 12px; box-shadow: 0 40px 100px #0009, 0 0 0 1px #ffffff14; transform-origin: 0 0; }
+  .dir { display: none; } .dir.on { display: block; }
+  .tl { position: absolute; top: 18px; left: 20px; display: flex; gap: 8px; z-index: 50; }
+  .tl i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } .tl i:nth-child(2){background:#febc2e} .tl i:nth-child(3){background:#28c840}
+  .note { position: absolute; right: 12px; bottom: 10px; font: 10px 'Geist Mono', monospace; color: #fff5; z-index: 60; }
+
+  /* fake broadcast frame for the video area */
+  .fakevideo { position: absolute; inset: 0; background:
+      radial-gradient(120% 90% at 50% 45%, transparent 40%, #000c 100%),
+      repeating-linear-gradient(100deg, transparent 0 88px, #ffffff1c 88px 91px),
+      linear-gradient(180deg, #0f1a12 0%, #1f4a26 34%, #2c6a33 60%, #245a2b 100%);
+    filter: saturate(.9); }
+  .fakevideo::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(180deg, #0a0d10 0%, #1b2430 60%, transparent 100%); }
+  .fakevideo::after { content: ''; position: absolute; left: 6%; bottom: 6%; width: 250px; height: 34px; border-radius: 4px; background: linear-gradient(90deg, #003594 0 45%, #0a2343 45% 90%, #111 90%); box-shadow: 0 4px 16px #0008; opacity: .9; }
+
+  /* =========================================================
+     A · SIBLING  (lukeghanna.com system)
+     ========================================================= */
+  .A { --bg:#131110; --bg2:#1a1715; --ink:#f0ebe3; --mute:#a39d94; --dim:#8a847b; --faint:#6b665f; --line:#ffffff17;
+       --accent:#f2c14e; --accent-soft:#f2c14e24; --edge:#f2c14e99; --live:#ff5a47;
+       --glass:linear-gradient(170deg,#ffffff12,#ffffff05); --glass-line:#ffffff1a; --glass-hl:#ffffff24;
+       --ease:cubic-bezier(.32,.72,0,1);
+       background: radial-gradient(900px 600px at 18% -10%, #ffdcb414, transparent 60%), radial-gradient(700px 500px at 100% 110%, #f2c14e0a, transparent 60%), var(--bg);
+       color: var(--ink); font-family: Geist, sans-serif; }
+  .A .glass { background: var(--glass); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-hl), 0 30px 80px #00000059; border-radius: 16px; }
+  .A .mono { font-family: 'Geist Mono', monospace; }
+  .A .side { position: absolute; top: 10px; bottom: 10px; left: 10px; width: 228px; padding: 52px 14px 16px; display: flex; flex-direction: column; }
+  .A .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; margin-bottom: 26px; }
+  .A .tally { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px #ff5a4726, 0 0 14px #ff5a47aa; }
+  .A .brand b { font-size: 21px; font-weight: 600; letter-spacing: -0.045em; }
+  .A .eyebrow { font: 500 10.5px 'Geist Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); padding: 0 10px; margin: 14px 0 6px; }
+  .A .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: 14px; color: var(--mute); }
+  .A .nav a.on { background: #ffffff0f; color: var(--ink); box-shadow: inset 0 1px 0 #ffffff14; }
+  .A .nav a .n { margin-left: auto; font: 11px 'Geist Mono', monospace; color: var(--faint); }
+  .A .nav a .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .A .nav a .dot.idle { background: transparent; border: 1px solid var(--faint); box-shadow: none; }
+  .A .side-foot { margin-top: auto; border-top: 1px solid var(--line); padding: 14px 10px 0; display: grid; gap: 8px; font-size: 12px; color: var(--mute); }
+  .A .side-foot div { display: flex; justify-content: space-between; }
+  .A .side-foot span:last-child { font: 11px 'Geist Mono', monospace; color: var(--ink); }
+  .A .main { position: absolute; left: 250px; right: 0; top: 0; bottom: 0; padding: 44px 44px 0 36px; overflow: hidden; }
+  .A .hero-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 30px; }
+  .A .date { font: 11px 'Geist Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+  .A h2.big { font-size: 44px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+  .A .sub { color: var(--mute); font-size: 15px; margin-top: 10px; }
+  .A .sub b { color: var(--ink); font-weight: 500; }
+  .A .sechead { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font: 500 11px 'Geist Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+  .A .sechead em { font-style: normal; color: var(--faint); }
+  .A .sechead::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .A .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 34px; }
+  .A .card { position: relative; padding: 16px 18px 14px; border-radius: 14px; background: #ffffff08; border: 1px solid #ffffff14; box-shadow: inset 0 1px 0 #ffffff12; overflow: hidden; transition: border-color .3s var(--ease), transform .3s var(--ease); }
+  .A .card .wash { position: absolute; inset: 0; opacity: .16; pointer-events: none; }
+  .A .card.hover { border-color: var(--edge); transform: translateY(-2px); box-shadow: inset 0 1px 0 #ffffff1a, 0 20px 50px #0007; }
+  .A .meta { position: relative; display: flex; align-items: center; gap: 8px; font: 11px 'Geist Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; }
+  .A .meta .livetag { color: var(--live); display: inline-flex; align-items: center; gap: 6px; }
+  .A .meta .livetag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .A .meta .soontag { color: var(--accent); }
+  .A .meta .r { margin-left: auto; }
+  .A .team { position: relative; display: flex; align-items: center; gap: 12px; height: 40px; }
+  .A .team img { width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 2px 6px #0006); }
+  .A .team .nm { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+  .A .team .rec { font: 11px 'Geist Mono', monospace; color: var(--faint); }
+  .A .team .sc { margin-left: auto; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .A .team.trail .nm, .A .team.trail .sc { color: var(--mute); }
+  .A .foot { position: relative; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .A .foot .st { font: 500 11px 'Geist Mono', monospace; letter-spacing: .06em; color: var(--accent); text-transform: uppercase; }
+  .A .foot .go { color: var(--ink); font-size: 12px; }
+  .A .sched { border-radius: 14px; background: #ffffff06; border: 1px solid #ffffff12; overflow: hidden; }
+  .A .day { font: 500 10.5px 'Geist Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); padding: 12px 18px 6px; }
+  .A .row { display: grid; grid-template-columns: 86px 44px 1fr 70px 16px; align-items: center; gap: 14px; padding: 10px 18px; border-top: 1px solid #ffffff0c; font-size: 14px; }
+  .A .row:hover, .A .row.hover { background: #ffffff08; }
+  .A .row .t { font: 12px 'Geist Mono', monospace; color: var(--mute); }
+  .A .row .lg { font: 10.5px 'Geist Mono', monospace; color: var(--dim); letter-spacing: .08em; }
+  .A .row .mu { display: flex; align-items: center; gap: 8px; }
+  .A .row .mu img { width: 20px; height: 20px; object-fit: contain; }
+  .A .row .mu .at { color: var(--faint); font-size: 12px; margin: 0 4px; }
+  .A .row .net { font: 11px 'Geist Mono', monospace; color: var(--dim); text-align: right; }
+  .A .row .chev { color: var(--faint); }
+  /* A player */
+  .A .ptop { position: absolute; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; padding: 0 20px 0 96px; gap: 14px; }
+  .A .pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: #ffffff0d; border: 1px solid #ffffff17; box-shadow: inset 0 1px 0 #ffffff14; font-size: 13px; color: var(--mute); }
+  .A .ptitle { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+  .A .ptitle span { color: var(--dim); font-weight: 400; margin: 0 6px; }
+  .A .video { position: absolute; left: 20px; top: 56px; width: 880px; height: 495px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px #ffffff14, 0 40px 90px #000a; }
+  .A .ctrl { position: absolute; left: 16px; right: 16px; bottom: 16px; height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-radius: 14px; background: #1a1715b8; backdrop-filter: blur(20px) saturate(1.4); border: 1px solid #ffffff1a; box-shadow: inset 0 1px 0 #ffffff1f; font-size: 12px; color: var(--mute); }
+  .A .ctrl .ic { width: 18px; height: 18px; border: 1.6px solid var(--ink); border-radius: 4px; opacity: .85; }
+  .A .vol { width: 90px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--ink) 70%, #ffffff2a 70%); }
+  .A .ctrl .livebtn { display: inline-flex; gap: 6px; align-items: center; font: 500 11px 'Geist Mono', monospace; letter-spacing: .1em; color: var(--ink); }
+  .A .ctrl .livebtn::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .A .under { position: absolute; left: 20px; top: 571px; width: 880px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .A .stat { padding: 14px 16px; border-radius: 12px; background: #ffffff06; border: 1px solid #ffffff10; }
+  .A .stat .k { font: 10.5px 'Geist Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  .A .stat .v { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .A .stat .v small { font-size: 13px; color: var(--mute); font-weight: 400; margin-left: 2px; }
+  .A .rail { position: absolute; top: 10px; right: 10px; bottom: 10px; width: 344px; padding: 20px; display: flex; flex-direction: column; gap: 22px; }
+  .A .board { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; text-align: center; gap: 6px; padding: 6px 0 2px; }
+  .A .board img { width: 52px; height: 52px; margin: 0 auto 8px; object-fit: contain; filter: drop-shadow(0 6px 14px #0008); }
+  .A .board .ab { font: 500 12px 'Geist Mono', monospace; letter-spacing: .1em; color: var(--mute); }
+  .A .board .sc { font-size: 44px; font-weight: 600; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+  .A .board .mid { font: 500 11px 'Geist Mono', monospace; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
+  .A .kv { display: grid; gap: 0; }
+  .A .kv div { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--mute); }
+  .A .kv div span:last-child { color: var(--ink); font: 12.5px 'Geist Mono', monospace; }
+  .A .src { display: grid; grid-template-columns: 8px 1fr auto 56px; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; font-size: 13px; color: var(--mute); }
+  .A .src.on { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1px #f2c14e40; }
+  .A .src .d { width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--faint); }
+  .A .src.on .d { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .A .src .q { font: 11px 'Geist Mono', monospace; color: var(--dim); }
+  .A .bar { height: 3px; border-radius: 3px; background: #ffffff14; overflow: hidden; } .A .bar i { display: block; height: 100%; background: var(--mute); border-radius: 3px; }
+  .A .src.on .bar i { background: var(--accent); }
+  .A .keys { margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--dim); }
+  .A kbd { font: 10.5px 'Geist Mono', monospace; padding: 2px 6px; border-radius: 5px; background: #ffffff0f; border: 1px solid #ffffff1a; color: var(--mute); margin-right: 4px; }
+
+  /* =========================================================
+     B · CONTROL ROOM
+     ========================================================= */
+  .B { --bg:#0a0b0d; --panel:#101216; --panel2:#15181d; --line:#22262d; --line2:#1a1d22; --ink:#e7e9ec; --mute:#8d949d; --dim:#5f6670; --tally:#ff3b30; --ok:#3ecf8e; --warn:#f5a524;
+       background: var(--bg); color: var(--ink); font-family: Geist, sans-serif; }
+  .B .mono, .B .m { font-family: 'Geist Mono', monospace; }
+  .B .side { position: absolute; top: 0; bottom: 0; left: 0; width: 220px; background: var(--panel); border-right: 1px solid var(--line); padding: 52px 0 0; display: flex; flex-direction: column; }
+  .B .brand { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 18px; border-bottom: 1px solid var(--line); }
+  .B .brand b { font-size: 17px; font-weight: 600; letter-spacing: -0.03em; }
+  .B .onair { font: 600 10px 'Geist Mono', monospace; letter-spacing: .16em; color: #fff; background: var(--tally); padding: 4px 7px 3px; border-radius: 3px; box-shadow: 0 0 18px #ff3b3088, inset 0 1px 0 #ffffff55; }
+  .B .grp { font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; color: var(--dim); padding: 16px 16px 6px; }
+  .B .nav a { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; padding: 8px 16px; font-size: 13.5px; color: var(--mute); border-left: 2px solid transparent; }
+  .B .nav a .ch { font: 11px 'Geist Mono', monospace; color: var(--dim); }
+  .B .nav a .c { font: 11px 'Geist Mono', monospace; color: var(--dim); }
+  .B .nav a.on { color: var(--ink); background: var(--panel2); border-left-color: var(--tally); }
+  .B .nav a .c.l { color: var(--tally); }
+  .B .side .sys { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 16px; font: 11px 'Geist Mono', monospace; color: var(--mute); display: grid; gap: 6px; }
+  .B .side .sys div { display: flex; justify-content: space-between; } .B .ok { color: var(--ok); }
+  .B .main { position: absolute; left: 220px; right: 0; top: 0; bottom: 0; }
+  .B .strip { height: 44px; display: flex; align-items: stretch; border-bottom: 1px solid var(--line); font: 11px 'Geist Mono', monospace; letter-spacing: .08em; color: var(--mute); }
+  .B .strip div { display: flex; align-items: center; gap: 8px; padding: 0 18px; border-right: 1px solid var(--line); }
+  .B .strip b { color: var(--ink); font-weight: 500; }
+  .B .strip .clock { margin-left: auto; border-right: 0; border-left: 1px solid var(--line); color: var(--ink); }
+  .B .body { padding: 22px 24px; }
+  .B .h { display: flex; align-items: baseline; gap: 12px; font: 500 11px 'Geist Mono', monospace; letter-spacing: .16em; color: var(--mute); margin-bottom: 10px; }
+  .B .h b { color: var(--ink); font-weight: 500; }
+  .B .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 24px; }
+  .B .tile { background: var(--panel); padding: 14px 16px; position: relative; }
+  .B .tile.sel { background: var(--panel2); box-shadow: inset 2px 0 0 var(--tally); }
+  .B .tile .top { display: flex; justify-content: space-between; font: 10.5px 'Geist Mono', monospace; letter-spacing: .1em; color: var(--dim); margin-bottom: 12px; }
+  .B .tile .top .lv { color: var(--tally); } .B .tile .top .sn { color: var(--warn); }
+  .B .line { display: grid; grid-template-columns: 22px 44px 1fr auto; align-items: center; gap: 10px; height: 32px; }
+  .B .line img { width: 20px; height: 20px; object-fit: contain; }
+  .B .line .ab { font: 600 13px 'Geist Mono', monospace; letter-spacing: .04em; }
+  .B .line .nm { font-size: 13px; color: var(--mute); }
+  .B .line .sc { font: 600 20px 'Geist Mono', monospace; font-variant-numeric: tabular-nums; }
+  .B .line.trail .ab, .B .line.trail .sc { color: var(--mute); }
+  .B .tile .bt { display: flex; justify-content: space-between; margin-top: 10px; font: 10.5px 'Geist Mono', monospace; color: var(--dim); letter-spacing: .06em; }
+  .B .tile .bt .src { color: var(--ok); }
+  .B table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+  .B th { text-align: left; font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; color: var(--dim); padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+  .B td { padding: 9px 14px; border-bottom: 1px solid var(--line2); font-size: 13px; color: var(--mute); }
+  .B td.m { font: 12px 'Geist Mono', monospace; color: var(--ink); }
+  .B td .mu { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+  .B td .mu img { width: 18px; height: 18px; object-fit: contain; }
+  .B td .mu .at { color: var(--dim); font: 11px 'Geist Mono', monospace; }
+  .B td .dayrow { font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; color: var(--dim); }
+  .B tr.dr td { background: var(--bg); padding: 7px 14px; }
+  /* B player */
+  .B .pv { position: absolute; left: 0; top: 0; right: 360px; bottom: 0; background: #000; }
+  .B .pv .bar { position: absolute; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 92px; background: var(--panel); border-bottom: 1px solid var(--line); font: 12px 'Geist Mono', monospace; color: var(--mute); }
+  .B .pv .bar b { font-family: Geist; font-weight: 500; color: var(--ink); font-size: 14px; }
+  .B .pv .vid { position: absolute; left: 0; right: 0; top: 48px; height: 520px; overflow: hidden; }
+  .B .pv .vid .tallychip { position: absolute; left: 14px; top: 14px; z-index: 2; }
+  .B .pv .ctrl { position: absolute; left: 0; right: 0; top: 568px; height: 44px; display: flex; align-items: center; gap: 16px; padding: 0 16px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font: 11px 'Geist Mono', monospace; color: var(--mute); letter-spacing: .06em; }
+  .B .pv .ctrl .sq { width: 16px; height: 16px; border: 1.5px solid var(--mute); border-radius: 3px; }
+  .B .pv .log { position: absolute; left: 0; right: 0; top: 612px; bottom: 0; background: var(--bg); padding: 12px 16px; font: 11.5px/1.9 'Geist Mono', monospace; color: var(--mute); }
+  .B .pv .log .t { color: var(--dim); margin-right: 12px; } .B .pv .log .e { color: var(--warn); } .B .pv .log .g { color: var(--ok); }
+  .B .tel { position: absolute; right: 0; top: 0; bottom: 0; width: 360px; background: var(--panel); border-left: 1px solid var(--line); padding-top: 48px; }
+  .B .tel .sect { border-bottom: 1px solid var(--line); padding: 14px 16px; }
+  .B .tel .sect .h { margin-bottom: 12px; }
+  .B .kvb div { display: flex; justify-content: space-between; font: 12px 'Geist Mono', monospace; color: var(--mute); padding: 4px 0; }
+  .B .kvb div span:last-child { color: var(--ink); }
+  .B .spark { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-top: 10px; }
+  .B .spark i { flex: 1; background: #3ecf8e55; border-radius: 1px; }
+  .B .srow { display: grid; grid-template-columns: 16px 1fr 50px 40px; gap: 10px; align-items: center; font: 12px 'Geist Mono', monospace; color: var(--mute); padding: 7px 0; }
+  .B .srow.on { color: var(--ink); } .B .srow .ind { width: 8px; height: 8px; border-radius: 2px; background: var(--line); } .B .srow.on .ind { background: var(--tally); box-shadow: 0 0 10px var(--tally); }
+
+  /* =========================================================
+     C · CINEMATIC
+     ========================================================= */
+  .C { --bg:#0b0b0c; --ink:#f4f4f5; --mute:#a1a1aa; --dim:#71717a; --line:#ffffff14; --live:#ff453a;
+       background: var(--bg); color: var(--ink); font-family: Geist, sans-serif; }
+  .C .top { position: absolute; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; gap: 28px; padding: 0 28px 0 100px; z-index: 5; }
+  .C .top b { font-size: 18px; font-weight: 600; letter-spacing: -0.04em; }
+  .C .seg { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #ffffff12; backdrop-filter: blur(20px); }
+  .C .seg span { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--mute); }
+  .C .seg span.on { background: #fff; color: #000; font-weight: 500; }
+  .C .top .r { margin-left: auto; font-size: 13px; color: var(--mute); }
+  .C .hero { position: absolute; left: 0; right: 0; top: 0; height: 430px; overflow: hidden; }
+  .C .hero .bgc { position: absolute; inset: -40px; background: radial-gradient(60% 90% at 18% 40%, #003594 0%, transparent 70%), radial-gradient(60% 90% at 82% 40%, #fc4c02cc 0%, transparent 70%), #0b0b0c; filter: blur(30px) saturate(1.1); opacity: .75; }
+  .C .hero .bgc::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, var(--bg) 92%); }
+  .C .hero .in { position: absolute; left: 56px; right: 56px; top: 96px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+  .C .hero .tm { display: flex; align-items: center; gap: 22px; }
+  .C .hero .tm.h { justify-content: flex-end; }
+  .C .hero .tm img { width: 112px; height: 112px; object-fit: contain; filter: drop-shadow(0 16px 30px #0009); }
+  .C .hero .tm .nm { font-size: 34px; font-weight: 600; letter-spacing: -0.04em; }
+  .C .hero .tm .rc { font-size: 14px; color: #ffffffa0; margin-top: 4px; }
+  .C .hero .mid { text-align: center; padding: 0 40px; }
+  .C .hero .score { font-size: 84px; font-weight: 600; letter-spacing: -0.06em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .C .hero .score span { color: #ffffff66; margin: 0 14px; font-weight: 300; }
+  .C .hero .live { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; margin-top: 12px; padding: 5px 12px; border-radius: 999px; background: #ffffff1c; backdrop-filter: blur(10px); }
+  .C .hero .live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+  .C .hero .cta { position: absolute; left: 50%; transform: translateX(-50%); top: 322px; display: flex; gap: 10px; }
+  .C .btn { padding: 12px 22px; border-radius: 999px; background: #fff; color: #000; font-weight: 600; font-size: 14px; }
+  .C .btn.g { background: #ffffff1f; color: #fff; backdrop-filter: blur(20px); }
+  .C .rows { position: absolute; left: 0; right: 0; top: 420px; padding: 0 0 0 56px; }
+  .C .rows h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .C .rail { display: flex; gap: 14px; margin-bottom: 26px; }
+  .C .tcard { position: relative; flex: 0 0 272px; height: 150px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px #ffffff14; }
+  .C .tcard .g { position: absolute; inset: 0; }
+  .C .tcard .g::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, #000b 100%); }
+  .C .tcard .lg { position: absolute; top: 22px; left: 0; right: 0; display: flex; justify-content: center; gap: 38px; }
+  .C .tcard .lg img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 8px 16px #0009); }
+  .C .tcard .cap { position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 13px; font-weight: 500; }
+  .C .tcard .cap small { display: block; color: #ffffffa6; font-weight: 400; font-size: 12px; margin-top: 2px; }
+  .C .tcard .cap .l { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+  .C .tcard .cap .l::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
+  .C .tcard.sm { flex-basis: 214px; height: 124px; } .C .tcard.sm .lg img { width: 44px; height: 44px; } .C .tcard.sm .lg { top: 18px; gap: 30px; }
+  /* C player */
+  .C .full { position: absolute; inset: 0; }
+  .C .full .shade-t { position: absolute; left: 0; right: 0; top: 0; height: 140px; background: linear-gradient(180deg, #000c, transparent); }
+  .C .full .shade-b { position: absolute; left: 0; right: 0; bottom: 0; height: 180px; background: linear-gradient(0deg, #000d, transparent); }
+  .C .full .ttl { position: absolute; top: 18px; left: 100px; display: flex; align-items: center; gap: 14px; }
+  .C .full .ttl .bk { width: 34px; height: 34px; border-radius: 50%; background: #ffffff24; backdrop-filter: blur(20px); display: grid; place-items: center; font-size: 16px; }
+  .C .full .ttl b { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; } .C .full .ttl span { color: #ffffffa6; font-size: 13px; margin-left: 8px; }
+  .C .full .bot { position: absolute; left: 40px; right: 420px; bottom: 30px; }
+  .C .full .prog { height: 4px; border-radius: 4px; background: #ffffff33; position: relative; margin-bottom: 16px; } .C .full .prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 97%; background: #fff; border-radius: 4px; }
+  .C .full .prog b { position: absolute; right: 3%; top: -4px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .C .full .btns { display: flex; align-items: center; gap: 22px; font-size: 13px; color: #fffc; }
+  .C .full .btns .ic { width: 22px; height: 22px; border-radius: 5px; border: 2px solid #fff; opacity: .9; }
+  .C .full .btns .lv { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; letter-spacing: .04em; color: #fff; } .C .full .btns .lv::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+  .C .drawer { position: absolute; top: 16px; right: 16px; bottom: 16px; width: 372px; border-radius: 22px; background: #1c1c1fb3; backdrop-filter: blur(40px) saturate(1.6); box-shadow: 0 0 0 1px #ffffff1c, 0 40px 80px #000a; padding: 22px; }
+  .C .drawer .sb { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; text-align: center; padding: 8px 0 18px; border-bottom: 1px solid var(--line); }
+  .C .drawer .sb img { width: 54px; height: 54px; margin: 0 auto 6px; object-fit: contain; }
+  .C .drawer .sb .s { font-size: 40px; font-weight: 600; letter-spacing: -0.05em; }
+  .C .drawer .sb .n { font-size: 13px; color: var(--mute); }
+  .C .drawer .sb .md { font-size: 12px; font-weight: 600; color: #fff; }
+  .C .drawer h4 { font-size: 13px; font-weight: 600; margin: 18px 0 10px; color: var(--mute); }
+  .C .opt { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; margin-bottom: 6px; background: #ffffff0a; font-size: 14px; }
+  .C .opt.on { background: #fff; color: #000; }
+  .C .opt small { margin-left: auto; font-size: 12px; opacity: .6; }
+  .C .chips { display: flex; gap: 8px; flex-wrap: wrap; } .C .chips span { font-size: 12px; padding: 6px 10px; border-radius: 999px; background: #ffffff12; color: var(--mute); } .C .chips span b { color: #fff; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>OnAir: three directions</h1>
+      <p>The same slate rendered three ways: Home, then the Player. Team data, logos, colors and scores come from fields ESPN already returns. The fixture slate is illustrative.</p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-d="A"><span class="k">A</span>Sibling</button>
+      <button role="tab" aria-selected="false" data-d="B"><span class="k">B</span>Control room</button>
+      <button role="tab" aria-selected="false" data-d="C"><span class="k">C</span>Cinematic</button>
+    </div>
+  </div>
+
+  <div class="dir on" data-d="A">
+    <div class="blurb"><div><b>A · Sibling.</b> Your site's system, carried over wholesale: warm black, Geist with mono eyebrows, numbered sections, glass with an inset highlight. Amber means the thing you've chosen. Red appears only on the live tally. Live games get cards; everything later becomes a scannable schedule instead of 40 identical tiles.</div></div>
+    <div class="label">Home</div><div class="stage"><div class="frame A" id="A-home"></div></div>
+    <div class="label">Player</div><div class="stage"><div class="frame A" id="A-player"></div></div>
+  </div>
+  <div class="dir" data-d="B">
+    <div class="blurb"><div><b>B · Control room.</b> Cool graphite, hairline grids, dense tabular mono, and a lit ON AIR tally. Sources and failover are first-class: telemetry, a latency trace, and an event log sit next to the picture. The most "engineered" option, and the least like your site.</div></div>
+    <div class="label">Home</div><div class="stage"><div class="frame B" id="B-home"></div></div>
+    <div class="label">Player</div><div class="stage"><div class="frame B" id="B-player"></div></div>
+  </div>
+  <div class="dir" data-d="C">
+    <div class="blurb"><div><b>C · Cinematic.</b> Apple TV / ESPN app energy: the featured live game fills the top in its teams' colors, with rows of team-color tiles below. The player is full-bleed with a frosted drawer. The flashiest option, but it leans hardest on team imagery and drifts furthest from your site's voice.</div></div>
+    <div class="label">Home</div><div class="stage"><div class="frame C" id="C-home"></div></div>
+    <div class="label">Player</div><div class="stage"><div class="frame C" id="C-player"></div></div>
+  </div>
+</div>
+
+<script>
+const NFL = a => `https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/${a}.png`
+const NCAA = id => `https://a.espncdn.com/i/teamlogos/ncaa/500/${id}.png`
+const T = {
+  LAR:{n:'Rams',c:'#003594',l:NFL('lar'),r:'1-1'}, DEN:{n:'Broncos',c:'#fc4c02',l:NFL('den'),r:'1-1'},
+  KC:{n:'Chiefs',c:'#e31837',l:NFL('kc'),r:'3-0'}, MIA:{n:'Dolphins',c:'#008e97',l:NFL('mia'),r:'0-3'},
+  MIN:{n:'Vikings',c:'#4f2683',l:NFL('min'),r:'3-0'}, TB:{n:'Buccaneers',c:'#bd1c36',l:NFL('tb'),r:'0-3'},
+  SEA:{n:'Seahawks',c:'#002a5c',l:NFL('sea'),r:'2-1'}, WSH:{n:'Commanders',c:'#5a1414',l:NFL('wsh'),r:'1-2'},
+  BAL:{n:'Ravens',c:'#29126f',l:NFL('bal'),r:'2-1'}, DAL:{n:'Cowboys',c:'#002a5c',l:NFL('dal'),r:'1-2'},
+  NYJ:{n:'Jets',c:'#115740',l:NFL('nyj'),r:'1-2'}, DET:{n:'Lions',c:'#0076b6',l:NFL('det'),r:'2-1'},
+  CIN:{n:'Bengals',c:'#fb4f14',l:NFL('cin'),r:'2-1'}, PIT:{n:'Steelers',c:'#ffb612',l:NFL('pit'),r:'2-1'},
+  NE:{n:'Patriots',c:'#c60c30',l:NFL('ne'),r:'1-2'}, JAX:{n:'Jaguars',c:'#007487',l:NFL('jax'),r:'2-1'},
+  TEX:{n:'Texas',c:'#bf5700',l:NCAA(251),r:'4-0'}, UGA:{n:'Georgia',c:'#ba0c2f',l:NCAA(61),r:'4-0'},
+  OSU:{n:'Ohio State',c:'#ce1141',l:NCAA(194),r:'4-0'}, MICH:{n:'Michigan',c:'#00274c',l:NCAA(130),r:'3-1'},
+  ALA:{n:'Alabama',c:'#9e1b32',l:NCAA(333),r:'3-1'}, LSU:{n:'LSU',c:'#461d7c',l:NCAA(99),r:'4-0'},
+}
+const live = [
+  {lg:'NFL',a:'LAR',h:'DEN',as:16,hs:0,st:'Halftime',net:'NBC',ven:'Empower Field at Mile High'},
+  {lg:'NFL',a:'KC',h:'MIA',as:21,hs:10,st:'Q3 · 4:12',net:'CBS',ven:'Hard Rock Stadium'},
+  {lg:'NFL',a:'MIN',h:'TB',as:17,hs:13,st:'Q4 · 2:41',net:'FOX',ven:'Raymond James Stadium'},
+]
+const soon = [
+  {lg:'NFL',a:'SEA',h:'WSH',t:'4:25 PM',in:'in 38 min',net:'FOX',ven:'Northwest Stadium'},
+  {lg:'NFL',a:'BAL',h:'DAL',t:'4:25 PM',in:'in 38 min',net:'CBS',ven:'AT&T Stadium'},
+]
+const later = [
+  {day:'Tonight',games:[{lg:'NFL',a:'NYJ',h:'DET',t:'8:20 PM',net:'NBC'}]},
+  {day:'Mon · Sep 28',games:[{lg:'NFL',a:'CIN',h:'PIT',t:'8:15 PM',net:'ESPN'}]},
+  {day:'Thu · Oct 1',games:[{lg:'NFL',a:'NE',h:'JAX',t:'8:15 PM',net:'PRIME'}]},
+  {day:'Sat · Oct 3',games:[{lg:'CFB',a:'UGA',h:'TEX',t:'12:00 PM',net:'ABC'},{lg:'CFB',a:'MICH',h:'OSU',t:'3:30 PM',net:'FOX'},{lg:'CFB',a:'LSU',h:'ALA',t:'7:30 PM',net:'ESPN'}]},
+]
+const tl = '<div class="tl"><i></i><i></i><i></i></div>'
+const note = '<div class="note">mockup · illustrative slate</div>'
+const lead = g => g.as > g.hs ? 'a' : g.hs > g.as ? 'h' : ''
+
+/* ---------------- A ---------------- */
+function Aside(active){
+  const it = (label,n,cls='',dot='') => `<a class="${cls}">${dot}${label}<span class="n">${n}</span></a>`
+  return `<aside class="side glass">
+    <div class="brand"><span class="tally"></span><b>OnAir</b></div>
+    <nav class="nav">
+      <div class="eyebrow">Watch</div>
+      ${it('All games','16',active==='all'?'on':'')}
+      ${it('Live now','3','', '<span class="dot"></span>')}
+      <div class="eyebrow">Leagues</div>
+      ${it('NFL','13','', '<span class="dot"></span>')}
+      ${it('College football','3','', '<span class="dot idle"></span>')}
+      <div class="eyebrow">System</div>
+      ${it('Diagnostics','','')}
+    </nav>
+    <div class="side-foot"><div><span>Sources</span><span>2 / 2 healthy</span></div><div><span>Updated</span><span>12s ago</span></div></div>
+  </aside>`
+}
+function Acard(g, i, kind){
+  const A = T[g.a], H = T[g.h], ld = lead(g)
+  const wash = `<div class="wash" style="background: radial-gradient(120% 90% at 0% 0%, ${A.c} 0%, transparent 55%), radial-gradient(120% 90% at 100% 100%, ${H.c} 0%, transparent 55%)"></div>`
+  const tag = kind==='live' ? `<span class="livetag">Live</span>` : `<span class="soontag">${g.in}</span>`
+  const row = (k,t,s,side) => `<div class="team ${ld && ld!==side?'trail':''}"><img src="${t.l}" alt=""><span class="nm">${t.n}</span><span class="rec">${t.r}</span>${s!==undefined?`<span class="sc">${s}</span>`:''}</div>`
+  return `<div class="card ${i===0&&kind==='live'?'hover':''}">${wash}
+    <div class="meta">${tag}<span>· ${g.lg}</span><span class="r">${g.net}</span></div>
+    ${row(g.a,A,g.as,'a')}${row(g.h,H,g.hs,'h')}
+    <div class="foot"><span class="st">${kind==='live'?g.st:g.t}</span>${i===0&&kind==='live'?'<span class="go">Watch →</span>':`<span>${g.ven}</span>`}</div>
+  </div>`
+}
+document.getElementById('A-home').innerHTML = tl + Aside('all') + `
+  <div class="main">
+    <div class="hero-top"><div><div class="date">Sunday · September 27</div><h2 class="big">Three games on air.</h2><div class="sub"><b>3 live</b> · 2 starting soon · 11 later this week</div></div></div>
+    <div class="sechead">Live now <em>01</em></div>
+    <div class="grid">${live.map((g,i)=>Acard(g,i,'live')).join('')}</div>
+    <div class="sechead">Starting soon <em>02</em></div>
+    <div class="grid" style="margin-bottom:34px">${soon.map((g,i)=>Acard(g,i,'soon')).join('')}</div>
+    <div class="sechead">Later <em>03</em></div>
+    <div class="sched">${later.map(d=>`<div class="day">${d.day}</div>${d.games.map((g,i)=>`<div class="row ${d.day==='Tonight'?'hover':''}"><span class="t">${g.t}</span><span class="lg">${g.lg}</span><span class="mu"><img src="${T[g.a].l}" alt="">${T[g.a].n}<span class="at">at</span><img src="${T[g.h].l}" alt="">${T[g.h].n}</span><span class="net">${g.net}</span><span class="chev">›</span></div>`).join('')}`).join('')}</div>
+  </div>` + note
+
+document.getElementById('A-player').innerHTML = tl + `
+  <div class="ptop"><span class="pill">‹ Games</span><div class="ptitle">Rams<span>at</span>Broncos</div></div>
+  <div class="video"><div class="fakevideo"></div>
+    <div class="ctrl"><span class="ic"></span><span class="vol"></span><span class="livebtn">LIVE</span><span style="margin-left:auto" class="mono">−6.3s</span><span class="ic"></span><span class="ic"></span></div>
+  </div>
+  <div class="under">
+    <div class="stat"><div class="k">Behind live</div><div class="v">6.3<small>s</small></div></div>
+    <div class="stat"><div class="k">Quality</div><div class="v">1080<small>p</small></div></div>
+    <div class="stat"><div class="k">On air</div><div class="v">42:18</div></div>
+    <div class="stat"><div class="k">Failovers</div><div class="v">1<small> · no black frames</small></div></div>
+  </div>
+  <aside class="rail glass">
+    <div>
+      <div class="sechead" style="margin-bottom:10px">Game <em>01</em></div>
+      <div class="board"><div><img src="${T.LAR.l}"><div class="ab">LAR · 1-1</div></div><div><div class="sc">16<span style="color:var(--faint);margin:0 8px;font-weight:300">–</span><span style="color:var(--mute)">0</span></div><div class="mid">Halftime</div></div><div><img src="${T.DEN.l}"><div class="ab">DEN · 1-1</div></div></div>
+      <div class="kv" style="margin-top:14px"><div><span>Network</span><span>NBC</span></div><div><span>Venue</span><span>Empower Field</span></div></div>
+    </div>
+    <div>
+      <div class="sechead" style="margin-bottom:8px">Sources <em>02</em></div>
+      <div class="src on"><span class="d"></span><span>Fixture A</span><span class="q">1080p</span><span class="bar"><i style="width:92%"></i></span></div>
+      <div class="src"><span class="d"></span><span>Fixture B</span><span class="q">720p</span><span class="bar"><i style="width:81%"></i></span></div>
+      <div class="src"><span class="d"></span><span>Embedded player</span><span class="q">—</span><span class="bar"><i style="width:40%"></i></span></div>
+    </div>
+    <div class="keys"><span><kbd>F</kbd>Fullscreen</span><span><kbd>S</kbd>Sources</span><span><kbd>R</kbd>Hide rail</span><span><kbd>Esc</kbd>Back</span></div>
+  </aside>` + note
+
+/* ---------------- B ---------------- */
+function Bside(){
+  const it = (ch,label,c,cls='',l=false) => `<a class="${cls}"><span class="ch">${ch}</span><span>${label}</span><span class="c ${l?'l':''}">${c}</span></a>`
+  return `<aside class="side">
+    <div class="brand"><b>OnAir</b><span class="onair">ON AIR</span></div>
+    <nav class="nav">
+      <div class="grp">GUIDE</div>
+      ${it('00','All games','16','on')}${it('01','Live','3','',true)}
+      <div class="grp">LEAGUES</div>
+      ${it('10','NFL','13 · 3●','',false)}${it('20','CFB','3')}
+      <div class="grp">SYSTEM</div>
+      ${it('90','Diagnostics','')}
+    </nav>
+    <div class="sys"><div><span>SOURCES</span><span class="ok">2/2 OK</span></div><div><span>SCHEDULE</span><span>12s</span></div></div>
+  </aside>`
+}
+function Btile(g,i,kind){
+  const A=T[g.a],H=T[g.h],ld=lead(g)
+  const ln=(k,t,s,side)=>`<div class="line ${ld&&ld!==side?'trail':''}"><img src="${t.l}"><span class="ab">${k}</span><span class="nm">${t.n}</span><span class="sc">${s??''}</span></div>`
+  return `<div class="tile ${i===0&&kind==='live'?'sel':''}"><div class="top">${kind==='live'?`<span class="lv">● LIVE</span>`:`<span class="sn">T−38:00</span>`}<span>${g.lg} · ${g.net}</span></div>${ln(g.a,A,g.as,'a')}${ln(g.h,H,g.hs,'h')}<div class="bt"><span>${kind==='live'?g.st.toUpperCase():g.t}</span><span class="src">${kind==='live'?'3 SRC READY':'WARMING'}</span></div></div>`
+}
+document.getElementById('B-home').innerHTML = tl + Bside() + `
+  <div class="main">
+    <div class="strip"><div>LIVE <b>3</b></div><div>SOON <b>2</b></div><div>LATER <b>11</b></div><div>SOURCES <b style="color:var(--ok)">2/2</b></div><div class="clock">SUN 27 SEP · 13:47:07 PT</div></div>
+    <div class="body">
+      <div class="h"><b>LIVE</b>03</div>
+      <div class="tiles">${live.map((g,i)=>Btile(g,i,'live')).join('')}</div>
+      <div class="h"><b>STARTING SOON</b>02</div>
+      <div class="tiles" style="grid-template-columns:repeat(3,1fr)">${soon.map((g,i)=>Btile(g,i,'soon')).join('')}<div class="tile"></div></div>
+      <div class="h"><b>SCHEDULE</b>11</div>
+      <table><thead><tr><th style="width:110px">TIME</th><th style="width:60px">LG</th><th>MATCHUP</th><th style="width:80px">NET</th><th style="width:110px">STATUS</th></tr></thead><tbody>
+      ${later.map(d=>`<tr class="dr"><td colspan="5"><span class="dayrow">${d.day.toUpperCase()}</span></td></tr>`+d.games.map(g=>`<tr><td class="m">${g.t}</td><td class="m" style="color:var(--mute)">${g.lg}</td><td><span class="mu"><img src="${T[g.a].l}">${T[g.a].n}<span class="at">@</span><img src="${T[g.h].l}">${T[g.h].n}</span></td><td class="m" style="color:var(--mute)">${g.net}</td><td class="m" style="color:var(--dim)">SCHEDULED</td></tr>`).join('')).join('')}
+      </tbody></table>
+    </div>
+  </div>` + note
+
+const spark = Array.from({length:44},(_,i)=>{const v=i===27?92:30+Math.round(18*Math.sin(i/3)+ (i%5)*3);return `<i style="height:${Math.min(100,v)}%;${i===27?'background:#f5a524':''}"></i>`}).join('')
+document.getElementById('B-player').innerHTML = tl + `
+  <div class="pv">
+    <div class="bar"><span>‹ GUIDE</span><b>LAR @ DEN</b><span>NFL · NBC · HALFTIME</span><span style="margin-left:auto;color:var(--ink)">LAR 16 · DEN 0</span></div>
+    <div class="vid"><div class="fakevideo"></div><span class="onair tallychip">ON AIR</span></div>
+    <div class="ctrl"><span class="sq"></span><span>VOL 70</span><span style="color:var(--tally)">● LIVE −6.3s</span><span style="margin-left:auto">1080p · 6.2 Mbps</span><span class="sq"></span></div>
+    <div class="log">
+      <div><span class="t">13:46:51</span><span class="g">stream_started</span>  fixture-a  1080p  startup 820ms</div>
+      <div><span class="t">13:41:02</span><span class="e">source_switch</span>  stall → fixture-a  swap 0 black frames  seek +0.0s wall</div>
+      <div><span class="t">13:41:01</span><span class="e">buffer_stall</span>  fixture-b  starved 4.1s</div>
+      <div><span class="t">13:04:33</span><span class="g">stream_started</span>  fixture-b  720p  startup 1.1s</div>
+    </div>
+  </div>
+  <aside class="tel">
+    <div class="sect"><div class="h"><b>STREAM</b></div><div class="kvb"><div><span>SOURCE</span><span>fixture-a</span></div><div><span>QUALITY</span><span>1080p</span></div><div><span>BEHIND LIVE</span><span>6.3s</span></div><div><span>ON AIR</span><span>42:18</span></div><div><span>FAILOVERS</span><span>1</span></div></div></div>
+    <div class="sect"><div class="h"><b>LATENCY</b>60 MIN</div><div class="spark">${spark}</div></div>
+    <div class="sect"><div class="h"><b>SOURCES</b>3</div>
+      <div class="srow on"><span class="ind"></span><span>fixture-a</span><span>1080p</span><span>.92</span></div>
+      <div class="srow"><span class="ind"></span><span>fixture-b</span><span>720p</span><span>.81</span></div>
+      <div class="srow"><span class="ind"></span><span>embed</span><span>—</span><span>.40</span></div>
+    </div>
+    <div class="sect" style="border:0;font:11px 'Geist Mono',monospace;color:var(--dim);line-height:2">F FULLSCREEN · S SOURCES · R RAIL · ESC GUIDE</div>
+  </aside>` + note
+
+/* ---------------- C ---------------- */
+const Ctile = (g,kind,sm) => { const A=T[g.a],H=T[g.h]; return `<div class="tcard ${sm?'sm':''}"><div class="g" style="background:linear-gradient(115deg, ${A.c} 0%, ${A.c} 48%, ${H.c} 52%, ${H.c} 100%)"></div><div class="lg"><img src="${A.l}"><img src="${H.l}"></div><div class="cap"><div>${A.n} ${kind==='live'?g.as:''} <span style="opacity:.5">${kind==='live'?'–':'at'}</span> ${H.n} ${kind==='live'?g.hs:''}<small>${kind==='live'?g.st:(g.t+' · '+g.net)}</small></div>${kind==='live'?'<span class="l">LIVE</span>':''}</div></div>` }
+document.getElementById('C-home').innerHTML = tl + `
+  <div class="hero"><div class="bgc"></div>
+    <div class="in">
+      <div class="tm"><img src="${T.LAR.l}"><div><div class="nm">Rams</div><div class="rc">1-1 · Away</div></div></div>
+      <div class="mid"><div class="score">16<span>–</span>0</div><div class="live">Live · Halftime · NBC</div></div>
+      <div class="tm h"><div style="text-align:right"><div class="nm">Broncos</div><div class="rc">1-1 · Home</div></div><img src="${T.DEN.l}"></div>
+    </div>
+    <div class="cta"><span class="btn">▶ Watch live</span><span class="btn g">Sources</span></div>
+  </div>
+  <div class="top"><b>OnAir</b><div class="seg"><span class="on">All</span><span>NFL</span><span>College</span></div><span class="r">Diagnostics</span></div>
+  <div class="rows">
+    <h3>Live now</h3><div class="rail">${live.slice(1).concat(soon).map((g,i)=>Ctile(g,i<2?'live':'soon')).join('')}</div>
+    <h3>This week</h3><div class="rail">${later.flatMap(d=>d.games).map(g=>Ctile(g,'soon',true)).join('')}</div>
+  </div>` + note
+
+document.getElementById('C-player').innerHTML = `
+  <div class="full"><div class="fakevideo"></div><div class="shade-t"></div><div class="shade-b"></div>
+    ${tl}
+    <div class="ttl"><span class="bk">‹</span><div><b>Rams at Broncos</b><span>NFL · NBC</span></div></div>
+    <div class="bot"><div class="prog"><i></i><b></b></div><div class="btns"><span class="ic"></span><span class="ic"></span><span class="lv">LIVE</span><span style="margin-left:auto">−6.3s</span><span class="ic"></span></div></div>
+  </div>
+  <aside class="drawer">
+    <div class="sb"><div><img src="${T.LAR.l}"><div class="n">Rams</div></div><div><div class="s">16 – 0</div><div class="md">Halftime</div></div><div><img src="${T.DEN.l}"><div class="n">Broncos</div></div></div>
+    <h4>Stream</h4>
+    <div class="chips"><span><b>1080p</b></span><span><b>6.3s</b> behind live</span><span><b>1</b> failover</span></div>
+    <h4>Sources</h4>
+    <div class="opt on">Fixture A<small>1080p</small></div>
+    <div class="opt">Fixture B<small>720p</small></div>
+    <div class="opt">Embedded player<small>fallback</small></div>
+  </aside>` + note
+
+/* ---------------- scale frames to fit ---------------- */
+function fit(){ document.querySelectorAll('.stage').forEach(s=>{ const f=s.firstElementChild; const k=Math.min(1, s.clientWidth/1280); f.style.transform=`scale(${k})`; s.style.height=(800*k)+'px' }) }
+addEventListener('resize', fit)
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected', x===b))
+  document.querySelectorAll('.dir').forEach(d=>d.classList.toggle('on', d.dataset.d===b.dataset.d)); fit()
+}))
+fit()
+</script>
+</body>
+</html>
