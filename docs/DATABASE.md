@@ -20,10 +20,11 @@ What discovery has seen. Upserted on every ESPN poll.
 | `start_time` | INTEGER | Unix ms |
 | `status` | TEXT | `LIVE`, `STARTING_SOON`, `SCHEDULED`, `RECENTLY_ENDED` |
 | `raw_data` | TEXT | This game's own ESPN event JSON; diagnostic only |
+| `detail_json` | TEXT | Display detail kept from ESPN: per-team abbreviation, short name, colors, logo, score, record; plus status detail, network, venue. Null when ESPN sent none. Added in migration 2 |
 | `cached_at` | INTEGER | Last time a poll returned it |
 
 Indexed on `status`, `league`, `start_time`.
-The sidebar hides a league with no game starting in the past 7 days or later (off-season), and shows it again once the new season's games appear.
+The top bar's league filter only offers leagues that have games in the schedule, so an off-season league drops out and returns once its new season's games appear.
 
 ### `sources`
 
