@@ -2,7 +2,7 @@ import React from 'react'
 import { Antenna, MonitorPlay, RadioTower, ShieldCheck, Timer, type LucideIcon } from 'lucide-react'
 import { TeamLogo } from '../TeamLogo/TeamLogo'
 import { TeamWash } from '../TeamWash/TeamWash'
-import { hasScore, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
+import { hasScore, headlineText, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
 import { formatDuration, formatKickoff } from '../../lib/time'
 import styles from './PlayerDrawer.module.css'
 
@@ -81,7 +81,7 @@ function Scoreboard({ game }: { game: Game }): React.JSX.Element {
   const lead = leader(game)
   const started = game.status === 'LIVE' || game.status === 'RECENTLY_ENDED'
   const status = started ? statusText(game) : formatKickoff(game.startTime)
-  const meta = [leagueLabel(game.league), game.network].filter(Boolean).join(' · ')
+  const meta = [leagueLabel(game.league), headlineText(game), game.network].filter(Boolean).join(' · ')
 
   return (
     <section className={styles.board}>

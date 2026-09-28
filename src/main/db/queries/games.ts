@@ -2,9 +2,9 @@ import Database from 'better-sqlite3'
 import { getDb } from '../connection'
 import type { Game, LeagueId, GameStatus } from '../../types'
 
-type GameDetail = Pick<Game, 'away' | 'home' | 'statusDetail' | 'network' | 'venue'>
+type GameDetail = Pick<Game, 'away' | 'home' | 'statusDetail' | 'network' | 'venue' | 'headline'>
 
-const DETAIL_KEYS = ['away', 'home', 'statusDetail', 'network', 'venue'] as const
+const DETAIL_KEYS = ['away', 'home', 'statusDetail', 'network', 'venue', 'headline'] as const
 
 interface GameRow {
   game_id: string

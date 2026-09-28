@@ -126,6 +126,7 @@ describe('games queries', () => {
       statusDetail: 'Q3 - 4:12',
       network: 'ESPN',
       venue: 'Crypto.com Arena',
+      headline: 'West Finals - Game 7',
     }
 
     it('round-trips team and game detail through upsertGame → getGameById', () => {

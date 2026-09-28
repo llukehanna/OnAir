@@ -259,3 +259,36 @@ describe('CBB/CFB nickname-only edge cases for matchGame', () => {
     expect(matchGame(game, 'wildcats vs bears')).toBe(0.3)
   })
 })
+
+describe('MLB matching', () => {
+  it('matches both teams of an MLB listing', () => {
+    const game = makeGame('mlb', 'Boston Red Sox', 'Chicago White Sox')
+    expect(matchGame(game, 'White Sox at Red Sox')).toBe(0.9)
+  })
+
+  it('does not treat a bare "Sox" as either Sox team', () => {
+    expect(matchTeam('Boston Red Sox', 'mlb', 'sox rivalry tonight').score).toBe(0)
+    expect(matchTeam('Chicago White Sox', 'mlb', 'sox rivalry tonight').score).toBe(0)
+  })
+
+  it('matches St. Louis written with its period', () => {
+    const game = makeGame('mlb', 'St. Louis Cardinals', 'Chicago Cubs')
+    expect(matchGame(game, 'Cubs vs. St. Louis Cardinals')).toBe(0.9)
+  })
+
+  it('matches two-letter abbreviations as whole words', () => {
+    expect(matchTeam('San Diego Padres', 'mlb', 'sd vs sf').score).toBe(1)
+  })
+})
+
+describe('whole-word matching', () => {
+  it('does not match a short abbreviation inside another word', () => {
+    // 'NE' (Patriots) and 'NO' (Saints) used to match any text containing those letters.
+    expect(matchTeam('New England Patriots', 'nfl', 'monday night football network').score).toBe(0)
+    expect(matchTeam('New Orleans Saints', 'nfl', 'north carolina').score).toBe(0)
+  })
+
+  it('still matches an abbreviation standing on its own', () => {
+    expect(matchTeam('New England Patriots', 'nfl', 'ne at buf').score).toBe(1)
+  })
+})

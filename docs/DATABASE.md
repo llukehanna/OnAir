@@ -15,12 +15,12 @@ What discovery has seen. Upserted on every ESPN poll.
 | Column | Type | Notes |
 |---|---|---|
 | `game_id` | TEXT PK | `${league}_${espnEventId}` |
-| `league` | TEXT | `nba`, `nfl`, `cbb`, `cfb` |
+| `league` | TEXT | `nba`, `nfl`, `mlb`, `cbb`, `cfb` |
 | `team_home`, `team_away` | TEXT | ESPN display names |
 | `start_time` | INTEGER | Unix ms |
 | `status` | TEXT | `LIVE`, `STARTING_SOON`, `SCHEDULED`, `RECENTLY_ENDED` |
 | `raw_data` | TEXT | This game's own ESPN event JSON; diagnostic only |
-| `detail_json` | TEXT | Display detail kept from ESPN: per-team abbreviation, short name, colors, logo, score, record; plus status detail, network, venue. Null when ESPN sent none. Added in migration 2 |
+| `detail_json` | TEXT | Display detail kept from ESPN: per-team abbreviation, short name, colors, logo, score, record; plus status detail, network, venue, round headline. Null when ESPN sent none. Added in migration 2 |
 | `cached_at` | INTEGER | Last time a poll returned it |
 
 Indexed on `status`, `league`, `start_time`.

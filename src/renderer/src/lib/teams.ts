@@ -1,9 +1,10 @@
 /** Display order for league filters; also the order leagues appear in the top bar. */
-export const LEAGUE_ORDER: LeagueId[] = ['nfl', 'nba', 'cfb', 'cbb']
+export const LEAGUE_ORDER: LeagueId[] = ['nfl', 'nba', 'mlb', 'cfb', 'cbb']
 
 const LEAGUE_LABEL: Record<LeagueId, string> = {
   nfl: 'NFL',
   nba: 'NBA',
+  mlb: 'MLB',
   cfb: 'College Football',
   cbb: 'College Basketball',
 }
@@ -11,6 +12,7 @@ const LEAGUE_LABEL: Record<LeagueId, string> = {
 const LEAGUE_SHORT: Record<LeagueId, string> = {
   nfl: 'NFL',
   nba: 'NBA',
+  mlb: 'MLB',
   cfb: 'CFB',
   cbb: 'CBB',
 }
@@ -79,6 +81,11 @@ export function statusText(game: Game): string {
   if (game.status === 'LIVE') return detail ?? 'Live'
   if (game.status === 'RECENTLY_ENDED') return detail ?? 'Final'
   return detail ?? ''
+}
+
+/** ESPN's round note, e.g. "NLWC - Game 1" reads as "NLWC · Game 1". */
+export function headlineText(game: Game): string | undefined {
+  return game.headline?.replace(/\s+-\s+/g, ' · ')
 }
 
 export function matchupLabel(game: Game): string {
