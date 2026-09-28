@@ -3,7 +3,9 @@ import {
   parseSegmentUris,
   compareManifests,
   checkLiveness,
+  resolveVariantUri,
 } from '../../src/main/playback/off-air'
+import { startHlsFixture, type HlsFixture } from '../../src/main/dev/hls-fixture'
 
 // ---------------------------------------------------------------------------
 // A source can return 200 on everything and still be dead: an off-air slate,
@@ -13,6 +15,14 @@ import {
 // The tell is #EXT-X-MEDIA-SEQUENCE. A live stream's sequence always advances;
 // a dead one serves the same manifest forever.
 // ---------------------------------------------------------------------------
+
+const MASTER = [
+  '#EXTM3U',
+  '#EXT-X-VERSION:3',
+  '#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720',
+  'media.m3u8',
+  '',
+].join('\n')
 
 function manifest(sequence: number, firstSegment = sequence): string {
   return [
@@ -108,10 +118,37 @@ describe('compareManifests', () => {
     expect(result.secondSequence).toBe(6)
   })
 
+  it('never calls a master playlist frozen — it has no live edge to read', () => {
+    // Regression: the manager polled the candidate URL, which is usually a
+    // master. No MEDIA-SEQUENCE, identical variant lines every time, and the
+    // URI fallback read that as a frozen edge: "sequence stuck at null".
+    const result = compareManifests(MASTER, MASTER)
+    expect(result.verdict).toBe('unknown')
+    expect(result.firstSequence).toBeNull()
+    expect(result.secondSequence).toBeNull()
+  })
+
+  it('never calls a playlist with no sequence and no segments frozen', () => {
+    const empty = '#EXTM3U\n#EXT-X-VERSION:3\n'
+    expect(compareManifests(empty, empty).verdict).toBe('unknown')
+  })
+
   it('treats a VOD playlist as advancing rather than dead', () => {
     // ENDLIST means a finite asset; it is not a stalled live edge.
     const vod = manifest(0) + '#EXT-X-ENDLIST\n'
     expect(compareManifests(vod, vod).verdict).toBe('advancing')
+  })
+})
+
+describe('resolveVariantUri', () => {
+  it('resolves the first variant against the master URL', () => {
+    expect(resolveVariantUri(MASTER, 'https://cdn/live/master.m3u8?token=abc')).toBe(
+      'https://cdn/live/media.m3u8'
+    )
+  })
+
+  it('returns null for a media playlist', () => {
+    expect(resolveVariantUri(manifest(3), 'https://cdn/x.m3u8')).toBeNull()
   })
 })
 
@@ -171,5 +208,96 @@ describe('checkLiveness', () => {
 
     const init = (fetchFn as jest.Mock).mock.calls[0][1] as RequestInit
     expect((init.headers as Record<string, string>).Referer).toBe('https://source.example/')
+  })
+
+  it('follows a master playlist to its media playlist before comparing', async () => {
+    let call = 0
+    const fetchFn = jest.fn(async (url: string) => ({
+      ok: true,
+      text: async () => (url.endsWith('master.m3u8') ? MASTER : manifest(call++)),
+    })) as unknown as typeof fetch
+
+    const result = await checkLiveness('https://cdn/live/master.m3u8', { fetchFn, delayMs: 0 })
+    expect(result).toEqual({ verdict: 'advancing', firstSequence: 0, secondSequence: 1 })
+
+    const urls = (fetchFn as jest.Mock).mock.calls.map((c) => c[0])
+    expect(urls).toEqual([
+      'https://cdn/live/master.m3u8',
+      'https://cdn/live/media.m3u8',
+      'https://cdn/live/media.m3u8',
+    ])
+  })
+
+  it('still reports frozen when the media playlist behind a master is stuck', async () => {
+    const fetchFn = jest.fn(async (url: string) => ({
+      ok: true,
+      text: async () => (url.endsWith('master.m3u8') ? MASTER : manifest(7)),
+    })) as unknown as typeof fetch
+
+    const result = await checkLiveness('https://cdn/live/master.m3u8', { fetchFn, delayMs: 0 })
+    expect(result).toEqual({ verdict: 'frozen', firstSequence: 7, secondSequence: 7 })
+  })
+
+  it('sends the CDN headers to the variant as well', async () => {
+    const fetchFn = jest.fn(async (url: string) => ({
+      ok: true,
+      text: async () => (url.endsWith('master.m3u8') ? MASTER : manifest(1)),
+    })) as unknown as typeof fetch
+
+    await checkLiveness('https://cdn/live/master.m3u8', {
+      fetchFn,
+      delayMs: 0,
+      referer: 'https://source.example/',
+    })
+
+    for (const [, init] of (fetchFn as jest.Mock).mock.calls) {
+      expect((init.headers as Record<string, string>).Referer).toBe('https://source.example/')
+    }
+  })
+
+  it('reports unknown when the variant cannot be fetched', async () => {
+    const fetchFn = jest.fn(async (url: string) => ({
+      ok: url.endsWith('master.m3u8'),
+      text: async () => MASTER,
+    })) as unknown as typeof fetch
+
+    const result = await checkLiveness('https://cdn/live/master.m3u8', { fetchFn, delayMs: 0 })
+    expect(result.verdict).toBe('unknown')
+  })
+})
+
+// The dev fixture hands the manager its master URL, exactly as real sources
+// do. This is the path that produced the spurious off_air failovers.
+describe('checkLiveness against the HLS fixture master URL', () => {
+  let fx: HlsFixture
+
+  beforeEach(async () => {
+    fx = await startHlsFixture({ windowSize: 6 })
+  })
+
+  afterEach(async () => {
+    await fx.close()
+  })
+
+  /** Advances the fixture between the two polls, standing in for the delay. */
+  function advancingFetch(): typeof fetch {
+    return (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await fetch(input, init)
+      if (String(input).endsWith('media.m3u8')) fx.advance()
+      return response
+    }) as typeof fetch
+  }
+
+  it('reports advancing for a healthy stream', async () => {
+    const result = await checkLiveness(fx.masterUrl, { fetchFn: advancingFetch(), delayMs: 0 })
+    expect(result.verdict).toBe('advancing')
+    expect(result.firstSequence).not.toBeNull()
+  })
+
+  it('reports frozen with a real sequence number in off-air mode', async () => {
+    fx.advance(3)
+    fx.setMode('off-air')
+    const result = await checkLiveness(fx.masterUrl, { fetchFn: advancingFetch(), delayMs: 0 })
+    expect(result).toEqual({ verdict: 'frozen', firstSequence: 3, secondSequence: 3 })
   })
 })

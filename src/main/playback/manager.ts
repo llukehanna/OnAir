@@ -519,7 +519,9 @@ export class PlaybackManager {
 
       console.log(
         `[PlaybackManager] off-air detected on ${source.sourceId}`,
-        `(sequence stuck at ${result.firstSequence})`
+        result.firstSequence === null
+          ? '(segment list unchanged)'
+          : `(sequence stuck at ${result.firstSequence})`
       )
       void this.failover(game.gameId, 'off_air')
     }, LIVENESS_INTERVAL_MS)
