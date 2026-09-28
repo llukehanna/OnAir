@@ -60,11 +60,41 @@ What scoring learns from. One row per source per league, written by playback.
 
 `UNIQUE(source_id, league)`, with a foreign key to `sources`.
 The scoring formula in [ARCHITECTURE.md](ARCHITECTURE.md#confidence-and-scoring) reads these. A source with no row scores a neutral 0.5 on the history terms.
+`league` holds a `LeagueId` for a game source, or the literal `'channel'` — channels share one history bucket across leagues rather than getting a row per league, since a channel has no league of its own. Added in migration 3.
+
+### `channels`
+
+24/7 channels discovered from sources' channel-listing pages. Upserted by the channel discovery scheduler (`src/main/channels/scheduler.ts`), which runs at startup and every 30 minutes. Added in migration 3.
+
+| Column | Type | Notes |
+|---|---|---|
+| `channel_id` | TEXT PK | `ch:<slug>`, e.g. `ch:espn2`. The `ch:` prefix keeps channel ids out of the game id space |
+| `name` | TEXT | Canonical display name, e.g. `ESPN2` |
+| `category` | TEXT | `sports`, `news`, `entertainment`, `other` |
+| `last_seen_at` | INTEGER | Last discovery run that any source listed it in |
+
+The `Channel` type's `sourceCount` is computed from `channel_sources` on read, not stored.
+
+### `channel_sources`
+
+One row per (channel, source) link: which sources currently carry a channel, and where. Added in migration 3.
+
+| Column | Type | Notes |
+|---|---|---|
+| `channel_id`, `source_id` | TEXT | |
+| `url` | TEXT | The source's own page for this channel |
+| `label` | TEXT | The source's own listing text, kept for display/debugging |
+| `seen_at` | INTEGER | Last discovery run in which this source listed this channel |
+
+`PRIMARY KEY(channel_id, source_id)`. Foreign keys to `channels` (`ON DELETE CASCADE`) and `sources`.
+A link not refreshed within 24 hours is deleted; a channel left with no links afterward is deleted too. Deletion only ever prunes on age — a source's listing coming back empty on one pass doesn't drop its links immediately.
 
 ### `stream_candidates`
 
 Probe history: one row per probed candidate, with `stream_url`, `stream_type`, `quality`, `score`, `probe_success`, `probe_latency_ms`, and `probed_at`.
-Foreign keys to `games` and `sources`.
+Foreign key to `sources`.
+
+`game_id` holds any watch target's id, despite the column name: a game id, or a channel id (`ch:<slug>`). Migration 3 dropped its foreign key to `games` — a channel id is never a row there — by rebuilding the table (SQLite can't drop a constraint in place) and copying every existing row across unchanged.
 
 The live, ranked candidate list is held in memory by the URL cache, not read from here.
 
