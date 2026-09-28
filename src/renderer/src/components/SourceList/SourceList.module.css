@@ -1,0 +1,110 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 64px 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+
+.row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.row:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.active {
+  background: var(--ink);
+  color: #0b0b0c;
+  box-shadow: none;
+  cursor: default;
+}
+
+.name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.active .meta {
+  color: rgba(11, 11, 12, 0.55);
+}
+
+.fail {
+  color: var(--bad);
+}
+
+.bar {
+  display: block;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--ink-2);
+}
+
+.active .bar {
+  background: rgba(11, 11, 12, 0.14);
+}
+
+.active .bar span {
+  background: #0b0b0c;
+}
+
+.state {
+  display: grid;
+  place-items: center;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.skeleton {
+  display: block;
+  height: 54px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
