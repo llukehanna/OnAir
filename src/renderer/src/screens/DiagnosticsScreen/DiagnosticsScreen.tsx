@@ -1,28 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { formatRelative } from '../../lib/time'
 import styles from './DiagnosticsScreen.module.css'
 
-function formatRelativeTime(timestampMs: number | null): string {
-  if (timestampMs === null) return 'Never'
-  const diffMs = Date.now() - timestampMs
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin} min ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`
-  const diffDay = Math.floor(diffHr / 24)
-  return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`
-}
+const REFRESH_MS = 10_000
 
-function getHealthClass(healthState: HealthState): string {
-  switch (healthState) {
-    case 'healthy': return styles.healthHealthy
-    case 'degraded': return styles.healthDegraded
-    case 'blocked': return styles.healthBlocked
-    case 'broken': return styles.healthBroken
-    default: return styles.healthUnknown
-  }
+const HEALTH_LABEL: Record<HealthState, string> = {
+  healthy: 'Healthy',
+  degraded: 'Degraded',
+  blocked: 'Blocked',
+  broken: 'Broken',
+  unknown: 'Not checked yet',
 }
 
 /** Event details are stored as a JSON string; anything unparseable shows nothing. */
@@ -36,143 +24,121 @@ function parseDetails(raw: string | null): Record<string, unknown> {
   }
 }
 
-function formatEventType(type: string): string {
-  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+function humanize(type: string): string {
+  const s = type.replace(/_/g, ' ')
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function getEventTypeClass(type: string): string {
-  if (type.includes('fail') || type.includes('error') || type === 'all_sources_failed') {
-    return styles.eventFailed
-  }
-  if (type.includes('start') || type.includes('success')) {
-    return styles.eventSuccess
-  }
-  return styles.eventNeutral
+type Tone = 'bad' | 'ok' | 'neutral'
+
+function toneOf(type: string): Tone {
+  if (type.includes('fail') || type.includes('error') || type.includes('stall')) return 'bad'
+  if (type.includes('start') || type.includes('success')) return 'ok'
+  return 'neutral'
 }
 
 export function DiagnosticsScreen(): React.JSX.Element {
   const [data, setData] = useState<DiagnosticsData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchDiagnostics = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const fetchDiagnostics = useCallback(async (manual = false) => {
+    if (manual) setLoading(true)
     try {
-      const result = await window.onair.getDiagnostics()
-      setData(result)
+      setData(await window.onair.getDiagnostics())
+      setError(null)
     } catch {
-      setError('Diagnostics unavailable')
-      setData(null)
+      setError('Diagnostics are unavailable right now.')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchDiagnostics()
+    void fetchDiagnostics()
+    const t = setInterval(() => void fetchDiagnostics(), REFRESH_MS)
+    return () => clearInterval(t)
   }, [fetchDiagnostics])
 
+  const sources = data?.sources ?? []
+  const events = (data?.recentEvents ?? []).slice(0, 30)
+  const healthy = sources.filter((s) => s.healthState === 'healthy').length
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>Diagnostics</h1>
-        <button
-          className={styles.refreshButton}
-          onClick={fetchDiagnostics}
-          aria-label="Refresh diagnostics"
-          disabled={loading}
-        >
-          <RefreshCw size={20} className={loading ? styles.spinning : undefined} />
-        </button>
-      </div>
-
-      {error && (
-        <div className={styles.errorState}>
-          <p className={styles.errorText}>{error}</p>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Diagnostics</h1>
+          <p className={styles.subtitle}>
+            {data
+              ? `${healthy} of ${sources.length} source${sources.length === 1 ? '' : 's'} healthy · ${
+                  events[0] ? `last event ${formatRelative(events[0].occurredAt)}` : 'no events yet'
+                }`
+              : 'Source health and playback history'}
+          </p>
         </div>
-      )}
+        <button className={styles.refresh} onClick={() => void fetchDiagnostics(true)} disabled={loading} aria-label="Refresh diagnostics">
+          <RefreshCw size={15} strokeWidth={2} className={loading ? styles.spinning : undefined} />
+          Refresh
+        </button>
+      </header>
 
-      {!error && data && (
-        <>
-          {/* Sources Table */}
-          <div className={styles.glassCard}>
-            <h2 className={styles.cardTitle}>Sources</h2>
-            {data.sources.length === 0 ? (
-              <p className={styles.emptyText}>No sources available.</p>
-            ) : (
-              <div className={styles.tableWrapper}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th className={styles.th}>Name</th>
-                      <th className={styles.th}>Health</th>
-                      <th className={styles.th}>Confidence</th>
-                      <th className={styles.th}>Enabled</th>
-                      <th className={styles.th}>Last Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.sources.map((source) => (
-                      <tr key={source.sourceId} className={styles.tr}>
-                        <td className={styles.tdName}>{source.name}</td>
-                        <td className={styles.td}>
-                          <span className={`${styles.healthBadge} ${getHealthClass(source.healthState)}`}>
-                            {source.healthState}
-                          </span>
-                        </td>
-                        <td className={styles.tdSecondary}>
-                          {Math.round(source.confidenceWeight * 100)}%
-                        </td>
-                        <td className={styles.td}>
-                          <span
-                            className={source.enabled ? styles.enabledDot : styles.disabledDot}
-                            aria-label={source.enabled ? 'Enabled' : 'Disabled'}
-                          />
-                        </td>
-                        <td className={styles.tdTertiary}>
-                          {formatRelativeTime(source.healthUpdatedAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      {error && <p className={styles.error}>{error}</p>}
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Sources</h2>
+        {data && sources.length === 0 && <p className={styles.empty}>No sources registered.</p>}
+        <div className={styles.sources}>
+          {sources.map((s) => (
+            <article key={s.sourceId} className={`${styles.source} ${s.enabled ? '' : styles.disabled}`}>
+              <div className={styles.sourceTop}>
+                <h3 className={styles.sourceName}>{s.name}</h3>
+                <span className={`${styles.health} ${styles[`h_${s.healthState}`]}`}>
+                  <span className={styles.healthDot} aria-hidden="true" />
+                  {HEALTH_LABEL[s.healthState]}
+                </span>
               </div>
-            )}
-          </div>
-
-          {/* Recent Events */}
-          <div className={styles.glassCard}>
-            <h2 className={styles.cardTitle}>Recent Events</h2>
-            {!data.recentEvents || data.recentEvents.length === 0 ? (
-              <p className={styles.emptyText}>No recent events.</p>
-            ) : (
-              <div className={styles.eventsList}>
-                {data.recentEvents.slice(0, 20).map((event) => {
-                  const details = parseDetails(event.details)
-                  return (
-                    <div key={event.id} className={styles.eventRow}>
-                      <span className={`${styles.eventTypeBadge} ${getEventTypeClass(event.eventType)}`}>
-                        {formatEventType(event.eventType)}
-                      </span>
-                      <span className={styles.eventTime}>{formatRelativeTime(event.occurredAt)}</span>
-                      {Object.keys(details).length > 0 && (
-                        <span className={styles.eventDetails}>
-                          {Object.entries(details)
-                            .slice(0, 3)
-                            .map(([k, v]) => `${k}: ${String(v)}`)
-                            .join(' · ')}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
+              <div className={styles.meter}>
+                <div className={styles.meterLabel}>
+                  <span>Confidence</span>
+                  <span className={styles.mono}>{Math.round(s.confidenceWeight * 100)}%</span>
+                </div>
+                <div className={styles.track}>
+                  <span style={{ width: `${Math.round(s.confidenceWeight * 100)}%` }} />
+                </div>
               </div>
-            )}
-          </div>
+              <div className={styles.sourceFoot}>
+                <span>{s.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span className={styles.mono}>Checked {formatRelative(s.healthUpdatedAt)}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        </>
-      )}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Recent events</h2>
+        {data && events.length === 0 && <p className={styles.empty}>Nothing has happened yet. Play a game and switches show up here.</p>}
+        <ol className={styles.timeline}>
+          {events.map((ev) => {
+            const details = Object.entries(parseDetails(ev.details)).slice(0, 4)
+            return (
+              <li key={ev.id} className={`${styles.event} ${styles[`t_${toneOf(ev.eventType)}`]}`}>
+                <span className={styles.eventDot} aria-hidden="true" />
+                <div className={styles.eventBody}>
+                  <span className={styles.eventType}>{humanize(ev.eventType)}</span>
+                  {details.length > 0 && (
+                    <span className={styles.eventDetails}>
+                      {details.map(([k, v]) => `${k.replace(/_/g, ' ')} ${String(v)}`).join(' · ')}
+                    </span>
+                  )}
+                </div>
+                <time className={styles.eventTime}>{formatRelative(ev.occurredAt)}</time>
+              </li>
+            )
+          })}
+        </ol>
+      </section>
     </div>
   )
 }
