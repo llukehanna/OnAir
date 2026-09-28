@@ -4,8 +4,14 @@ import {
   tvmazePrograms,
   mergePrograms,
   fetchTvmaze,
+  fetchTvmazeCached,
   buildGuide,
+  buildAndStoreGuide,
+  getOrBuildGuide,
+  getLatestGuide,
   resolveKnownChannelId,
+  __resetTvmazeCacheForTests,
+  __resetLatestGuideForTests,
   type TvmazeEpisode,
 } from '../../src/main/channels/listings'
 import type { Channel, Game, GuideProgram } from '../../src/main/types'
@@ -454,5 +460,121 @@ describe('buildGuide', () => {
       `https://api.tvmaze.com/schedule?country=US&date=${fmt(today)}`,
       `https://api.tvmaze.com/schedule?country=US&date=${fmt(tomorrow)}`,
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchTvmazeCached (I2)
+// ---------------------------------------------------------------------------
+
+describe('fetchTvmazeCached', () => {
+  beforeEach(() => {
+    __resetTvmazeCacheForTests()
+  })
+
+  it('does not refetch a date within the 30-minute TTL', async () => {
+    const episode = makeEpisode({})
+    const fetchFn = jest.fn(async () => ({ ok: true, json: async () => [episode] })) as unknown as typeof fetch
+    const now = Date.parse('2026-09-28T12:00:00Z')
+
+    const first = await fetchTvmazeCached(['2026-09-28'], fetchFn, now)
+    const second = await fetchTvmazeCached(['2026-09-28'], fetchFn, now + 10 * 60_000) // +10min, within TTL
+
+    expect(first).toEqual([episode])
+    expect(second).toEqual([episode])
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('refetches a date once the 30-minute TTL has elapsed', async () => {
+    const episode = makeEpisode({})
+    const fetchFn = jest.fn(async () => ({ ok: true, json: async () => [episode] })) as unknown as typeof fetch
+    const now = Date.parse('2026-09-28T12:00:00Z')
+
+    await fetchTvmazeCached(['2026-09-28'], fetchFn, now)
+    await fetchTvmazeCached(['2026-09-28'], fetchFn, now + 31 * 60_000) // past the 30-min TTL
+
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cache a failed fetch as success — the next call retries it', async () => {
+    const episode = makeEpisode({})
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [episode] }) as unknown as typeof fetch
+    const now = Date.parse('2026-09-28T12:00:00Z')
+
+    const first = await fetchTvmazeCached(['2026-09-28'], fetchFn, now)
+    // Still within the TTL window of the (failed) first call — but since a
+    // failure isn't cached, this must retry rather than reuse [].
+    const second = await fetchTvmazeCached(['2026-09-28'], fetchFn, now + 1000)
+
+    expect(first).toEqual([])
+    expect(second).toEqual([episode])
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('caches each date independently', async () => {
+    const fetchFn = jest.fn(async () => ({ ok: true, json: async () => [] })) as unknown as typeof fetch
+    const now = Date.parse('2026-09-28T12:00:00Z')
+
+    await fetchTvmazeCached(['2026-09-28'], fetchFn, now)
+    await fetchTvmazeCached(['2026-09-29'], fetchFn, now) // a different date — not covered by the first's cache
+
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Shared "latest guide" store (I2): buildAndStoreGuide / getOrBuildGuide /
+// getLatestGuide — the single place index.ts and ipc/handlers.ts both read
+// and write through, so 'get-guide' serves what the refresh loop already
+// built instead of independently rebuilding.
+// ---------------------------------------------------------------------------
+
+describe('latest guide store', () => {
+  beforeEach(() => {
+    __resetLatestGuideForTests()
+    __resetTvmazeCacheForTests()
+  })
+
+  it('getLatestGuide is null before anything has been built', () => {
+    expect(getLatestGuide()).toBeNull()
+  })
+
+  it('buildAndStoreGuide records its result as the latest', async () => {
+    const now = Date.parse('2026-09-28T12:00:00Z')
+    const channels = [makeChannel('ch:nbc', 'NBC')]
+    const fetchFn = jest.fn(async () => ({ ok: false, json: async () => [] })) as unknown as typeof fetch
+
+    const guide = await buildAndStoreGuide({ channels, games: [], fetchFn, now })
+
+    expect(getLatestGuide()).toBe(guide)
+  })
+
+  it('getOrBuildGuide builds only when nothing has been built yet', async () => {
+    const now = Date.parse('2026-09-28T12:00:00Z')
+    const channels = [makeChannel('ch:nbc', 'NBC')]
+    const fetchFn = jest.fn(async () => ({ ok: false, json: async () => [] })) as unknown as typeof fetch
+
+    const built = await getOrBuildGuide({ channels, games: [], fetchFn, now })
+    expect(getLatestGuide()).toBe(built)
+
+    // A second call with completely different deps must NOT rebuild — it
+    // should hand back the exact same guide already stored.
+    const second = await getOrBuildGuide({ channels: [], games: [], fetchFn, now: now + 1 })
+    expect(second).toBe(built)
+  })
+
+  it('buildAndStoreGuide uses the cached TVmaze fetch, not a fresh one each call', async () => {
+    const now = Date.parse('2026-09-28T12:00:00Z')
+    const channels = [makeChannel('ch:nbc', 'NBC')]
+    const fetchFn = jest.fn(async () => ({ ok: true, json: async () => [] })) as unknown as typeof fetch
+
+    await buildAndStoreGuide({ channels, games: [], fetchFn, now })
+    await buildAndStoreGuide({ channels, games: [], fetchFn, now: now + 60_000 }) // well within the TTL
+
+    // 2 dates (today + tomorrow) fetched once, not once per call.
+    expect(fetchFn).toHaveBeenCalledTimes(2)
   })
 })
