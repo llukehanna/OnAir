@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import type { Game, StreamCandidate, HealthState, WatchTarget, ChannelSourceLink } from '../types'
+import type { Game, StreamCandidate, HealthState, WatchTarget, ChannelSourceLink, ReliabilityScope } from '../types'
 import type { SourceAdapter, RawStreamCandidate } from '../adapters/base'
 import type { PlaywrightPool } from '../adapters/pool'
 import { getAllAdapters } from '../adapters/registry'
@@ -151,12 +151,35 @@ async function collectGameCandidates(
     console.warn(`[candidates] no pipeline candidates after waiting for all adapters`)
   }
 
-  // ── Step 4: Probe all candidates in parallel ──────────────────────────────
+  // ── Steps 4-5: Probe, score and rank ──────────────────────────────────────
+  // Shared with the channel pipeline below — see probeAndRank.
+  return probeAndRank(pipeline, game.gameId, game.league, fetchFn, db)
+}
+
+/**
+ * Probes every collected candidate in parallel, scores the survivors, and
+ * returns them sorted by score descending. Shared by both the game and
+ * channel pipelines so probing/scoring/the StreamCandidate shape can never
+ * drift between the two — only how a PipelineCandidate[] gets built differs.
+ *
+ * `id` and `scope` key the probe/reliability lookups and the resulting
+ * StreamCandidate.gameId/candidateId: a game's gameId + league, or a
+ * channel's id + the 'channel' reliability scope.
+ *
+ * Returns [] (not throw) if every candidate fails to probe.
+ */
+async function probeAndRank(
+  pipeline: PipelineCandidate[],
+  id: string,
+  scope: ReliabilityScope,
+  fetchFn?: typeof fetch,
+  db?: Database.Database
+): Promise<StreamCandidate[]> {
   const probeResults = await Promise.allSettled(
     pipeline.map(pc =>
       probeCandidate(
         {
-          gameId: game.gameId,
+          gameId: id,
           sourceId: pc.sourceId,
           // Use refererUrl from raw candidate if available (e.g. a source that links out to an external player page)
           // so the CDN receives the correct Referer it expects, not the adapter's base URL.
@@ -175,7 +198,6 @@ async function collectGameCandidates(
     console.warn(`[candidates] all probes failed — URLs may require specific Referer or be expired`)
   }
 
-  // ── Step 5: Score and rank ────────────────────────────────────────────────
   const ranked: StreamCandidate[] = []
 
   for (let i = 0; i < pipeline.length; i++) {
@@ -186,7 +208,7 @@ async function collectGameCandidates(
     if (!probe) continue  // probe failed -> drop candidate
 
     const pc = pipeline[i]
-    const reliability = getReliability(pc.sourceId, game.league, db)
+    const reliability = getReliability(pc.sourceId, scope, db)
     const score = computeScore(
       reliability,
       probe.qualityScore,
@@ -196,8 +218,8 @@ async function collectGameCandidates(
     )
 
     ranked.push({
-      candidateId: `${pc.sourceId}_${game.gameId}_${Date.now()}_${i}`,
-      gameId: game.gameId,
+      candidateId: `${pc.sourceId}_${id}_${Date.now()}_${i}`,
+      gameId: id,
       sourceId: pc.sourceId,
       streamUrl: probe.streamUrl,
       streamType: probe.streamType,
@@ -285,60 +307,7 @@ async function collectChannelCandidates(
     })
   )
 
-  const probeResults = await Promise.allSettled(
-    pipeline.map((pc) =>
-      probeCandidate(
-        {
-          gameId: channelId,
-          sourceId: pc.sourceId,
-          sourceDomain: pc.raw.refererUrl ?? pc.sourceDomain,
-          raw: pc.raw,
-        },
-        fetchFn,
-        db
-      )
-    )
-  )
-
-  const ranked: StreamCandidate[] = []
-  for (let i = 0; i < pipeline.length; i++) {
-    const probeResult = probeResults[i]
-    if (probeResult.status === 'rejected') continue
-
-    const probe = probeResult.value
-    if (!probe) continue
-
-    const pc = pipeline[i]
-    const reliability = getReliability(pc.sourceId, 'channel', db)
-    const score = computeScore(
-      reliability,
-      probe.qualityScore,
-      probe.probeLatencyMs,
-      pc.finalConfidence,
-      pc.healthState
-    )
-
-    ranked.push({
-      candidateId: `${pc.sourceId}_${channelId}_${Date.now()}_${i}`,
-      gameId: channelId,
-      sourceId: pc.sourceId,
-      streamUrl: probe.streamUrl,
-      streamType: probe.streamType,
-      quality: probe.quality,
-      score,
-      probedAt: Date.now(),
-      probeSuccess: true,
-      probeLatencyMs: probe.probeLatencyMs,
-      refererUrl: pc.raw.refererUrl ?? null,
-      cdnOrigin: pc.raw.cdnOrigin ?? null,
-      cdnReferer: pc.raw.cdnReferer ?? null,
-      browserContext: pc.raw.browserContext,
-      manifestBody: pc.raw.manifestBody,
-      embedPlayerUrl: pc.raw.embedPlayerUrl,
-    })
-  }
-
-  ranked.sort((a, b) => b.score - a.score)
-  console.log(`[candidates] final ranked count (channel): ${ranked.length}`)
-  return ranked
+  // Probing, scoring and the StreamCandidate shape are shared with the game
+  // pipeline — see probeAndRank.
+  return probeAndRank(pipeline, channelId, 'channel', fetchFn, db)
 }
