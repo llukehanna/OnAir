@@ -49,8 +49,12 @@ export async function startFixtureServers(): Promise<void> {
   try {
     // Program dates on both, from the same start, so a switch between them can
     // align on wall-clock time the way continuity does with real broadcasts.
-    primary = await startHlsFixture({ mediaDir: path.join(root, 'a'), windowSize: 6, programDateTime: true })
-    secondary = await startHlsFixture({ mediaDir: path.join(root, 'b'), windowSize: 6, programDateTime: true })
+    // autoAdvance, because nothing else moves the live edge in the running app:
+    // without it a 'healthy' stream is indistinguishable from an off-air one,
+    // and the liveness monitor rightly fails it over.
+    const shared = { windowSize: 6, programDateTime: true, autoAdvance: true }
+    primary = await startHlsFixture({ ...shared, mediaDir: path.join(root, 'a') })
+    secondary = await startHlsFixture({ ...shared, mediaDir: path.join(root, 'b') })
   } catch (err) {
     // Dev-only scaffolding must never take the app down with it.
     console.error(`[fixture] failed to start from ${root}:`, err)
@@ -80,7 +84,7 @@ export function getFixtureMode(): FailureMode | null {
   return primary?.getMode() ?? null
 }
 
-/** Advances the live edge, since the fixture does not do so on its own. */
+/** Advances the live edge immediately, on top of the fixture's own timer. */
 export function advanceFixture(count = 1): void {
   primary?.advance(count)
   secondary?.advance(count)
