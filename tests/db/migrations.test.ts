@@ -36,8 +36,36 @@ describe('runMigrations', () => {
       db.prepare('SELECT version FROM schema_version ORDER BY version').all() as { version: number }[]
     ).map((row) => row.version)
 
-    expect(versions).toContain(1)
+    expect(versions).toEqual([1, 2])
 
+    db.close()
+  })
+
+  it('v2 adds a nullable detail_json column to games', () => {
+    const db = createTestDbWithMigrations()
+    const columns = db.prepare('PRAGMA table_info(games)').all() as { name: string; type: string; notnull: number }[]
+    const detail = columns.find((c) => c.name === 'detail_json')
+    expect(detail).toBeDefined()
+    expect(detail!.type).toBe('TEXT')
+    expect(detail!.notnull).toBe(0)
+    db.close()
+  })
+
+  it('upgrades a v1 database to v2 without losing rows', () => {
+    const db = createTestDb()
+    runMigrations(db)
+    // Simulate a database that only ever saw v1: drop the v2 column and its version row.
+    db.exec('ALTER TABLE games DROP COLUMN detail_json')
+    db.prepare('DELETE FROM schema_version WHERE version = 2').run()
+    db.prepare(`
+      INSERT INTO games (game_id, league, team_home, team_away, start_time, status, cached_at)
+      VALUES ('nba_1', 'nba', 'Home', 'Away', 1, 'LIVE', 1)
+    `).run()
+
+    runMigrations(db)
+
+    const row = db.prepare('SELECT game_id, detail_json FROM games').get() as { game_id: string; detail_json: string | null }
+    expect(row).toEqual({ game_id: 'nba_1', detail_json: null })
     db.close()
   })
 

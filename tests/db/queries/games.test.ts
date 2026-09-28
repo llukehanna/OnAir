@@ -111,6 +111,65 @@ describe('games queries', () => {
     })
   })
 
+  describe('detail_json', () => {
+    const richGame: Game = {
+      ...nbaGame,
+      gameId: 'nba_rich',
+      away: {
+        abbr: 'BOS', shortName: 'Celtics', color: '#007a33', altColor: '#ffffff',
+        logo: 'https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/bos.png', score: 88, record: '40-12',
+      },
+      home: {
+        abbr: 'LAL', shortName: 'Lakers', color: '#552583', altColor: null,
+        logo: null, score: 91, record: null,
+      },
+      statusDetail: 'Q3 - 4:12',
+      network: 'ESPN',
+      venue: 'Crypto.com Arena',
+    }
+
+    it('round-trips team and game detail through upsertGame → getGameById', () => {
+      const db = createTestDbWithMigrations()
+      upsertGame(richGame, undefined, db)
+      expect(getGameById('nba_rich', db)).toEqual(richGame)
+    })
+
+    it('round-trips detail through getGames', () => {
+      const db = createTestDbWithMigrations()
+      upsertGame(richGame, undefined, db)
+      expect(getGames('nba', db)).toEqual([richGame])
+    })
+
+    it('stores null detail_json for a game without detail', () => {
+      const db = createTestDbWithMigrations()
+      upsertGame(nbaGame, undefined, db)
+      const row = db.prepare('SELECT detail_json FROM games WHERE game_id = ?').get('nba_001') as { detail_json: string | null }
+      expect(row.detail_json).toBeNull()
+      const game = getGameById('nba_001', db)!
+      expect(game).toEqual(nbaGame)
+      expect('away' in game).toBe(false)
+    })
+
+    it('returns a game without detail when detail_json is invalid', () => {
+      const db = createTestDbWithMigrations()
+      upsertGame(richGame, undefined, db)
+      db.prepare('UPDATE games SET detail_json = ? WHERE game_id = ?').run('not json', 'nba_rich')
+      const game = getGameById('nba_rich', db)!
+      expect(game.gameId).toBe('nba_rich')
+      expect(game.away).toBeUndefined()
+      expect(game.home).toBeUndefined()
+      expect(game.statusDetail).toBeUndefined()
+    })
+
+    it('ignores detail_json that parses to a non-object', () => {
+      const db = createTestDbWithMigrations()
+      upsertGame(richGame, undefined, db)
+      db.prepare('UPDATE games SET detail_json = ? WHERE game_id = ?').run('null', 'nba_rich')
+      const game = getGameById('nba_rich', db)!
+      expect(game.away).toBeUndefined()
+    })
+  })
+
   describe('deleteOldGames', () => {
     it('deletes RECENTLY_ENDED games older than maxAgeMs', () => {
       const db = createTestDbWithMigrations()

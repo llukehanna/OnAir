@@ -96,6 +96,14 @@ const migrations: Migration[] = [
       `)
     }
   },
+  {
+    version: 2,
+    name: 'games_detail_json',
+    // Team/game detail from ESPN (logos, colors, scores, clock), stored as JSON.
+    up: (db) => {
+      db.exec('ALTER TABLE games ADD COLUMN detail_json TEXT')
+    }
+  },
 ]
 
 export function runMigrations(dbOverride?: Database.Database): void {
