@@ -523,6 +523,22 @@ describe('fetchTvmazeCached', () => {
 
     expect(fetchFn).toHaveBeenCalledTimes(2)
   })
+
+  it('evicts a date once it falls outside the requested set (bounded cache)', async () => {
+    const fetchFn = jest.fn(async () => ({ ok: true, json: async () => [] })) as unknown as typeof fetch
+    const now = Date.parse('2026-09-28T12:00:00Z')
+
+    await fetchTvmazeCached(['2026-09-28', '2026-09-29'], fetchFn, now) // day N, N+1
+    await fetchTvmazeCached(['2026-09-29', '2026-09-30'], fetchFn, now + 1000) // day N+1, N+2 — day N drops out
+
+    // Still well within the 30-minute TTL, but day N (2026-09-28) should have
+    // been evicted the moment it fell out of the requested set, so asking
+    // for it again must refetch rather than being served from a stale entry
+    // that should no longer exist.
+    fetchFn.mockClear()
+    await fetchTvmazeCached(['2026-09-28'], fetchFn, now + 2000)
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
