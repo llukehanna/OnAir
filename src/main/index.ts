@@ -13,9 +13,10 @@ import {
 } from './dev/fixture-adapter'
 import { registerHandlers } from './ipc/handlers'
 import { startDiscovery, stopDiscovery } from './discovery/scheduler'
+import { startChannelDiscovery, stopChannelDiscovery } from './channels/scheduler'
 import { startWarmer, stopWarmer, onGamesUpdated } from './engine/warmer'
 import { PlaywrightPool } from './adapters/pool'
-import { register } from './adapters/registry'
+import { register, getAllAdapters } from './adapters/registry'
 import { registerBuiltinSources } from './adapters/sources'
 import { setupCors } from './playback/cors'
 import { initAdBlock, stopAdBlock } from './playback/adblock'
@@ -136,14 +137,24 @@ app.whenReady().then(async () => {
     (target) => getStreamCandidates(target, pool ?? undefined), // bind pool
   )
 
-  // 6. Register IPC handlers (pass playbackManager)
-  registerHandlers(playbackManager)
+  // 6. Register IPC handlers (pass playbackManager and the pool, for refresh-channels)
+  registerHandlers(playbackManager, pool ?? undefined)
 
   // 7. Start discovery
   startDiscovery(win, (update) => onGamesUpdated(update, pool ?? undefined))
 
   // 7.5 Start pre-warmer (subscribes to games-updated via callback above)
   startWarmer(pool ?? undefined)
+
+  // 7.6 Start channel discovery: run now, then every 30 minutes, over every
+  //     registered adapter (built-ins plus the dev fixture when enabled).
+  //     getAllAdapters is passed by reference (not called here) so the
+  //     scheduler always reads the registry's current contents each pass.
+  if (pool) {
+    startChannelDiscovery(pool, getAllAdapters, (channels) => {
+      if (!win.isDestroyed()) win.webContents.send('channels-updated', channels)
+    })
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -160,6 +171,7 @@ app.on('before-quit', () => {
   stopWarmer()
   void stopFixtureServers()  // no-op unless fixture mode was enabled
   stopDiscovery()
+  stopChannelDiscovery()
   pool?.shutdown()
   closeDb()
 })
