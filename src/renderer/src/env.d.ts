@@ -6,7 +6,7 @@
 // must be in an ambient (non-module) file, and this file is a module.
 
 declare global {
-  type LeagueId = 'nba' | 'nfl' | 'cbb' | 'cfb'
+  type LeagueId = 'nba' | 'nfl' | 'mlb' | 'cbb' | 'cfb'
 
   type GameStatus = 'LIVE' | 'STARTING_SOON' | 'RECENTLY_ENDED' | 'SCHEDULED'
 
@@ -42,8 +42,9 @@ declare global {
     away?: TeamInfo
     home?: TeamInfo
     statusDetail?: string     // ESPN status.type.shortDetail, e.g. 'Q3 - 4:12', 'Halftime', 'Final'
-    network?: string          // first broadcast name, e.g. 'NBC'
+    network?: string          // TV network, national preferred, e.g. 'NBC'
     venue?: string
+    headline?: string         // ESPN's round note, e.g. 'NLWC - Game 1'
   }
 
   interface Source {
