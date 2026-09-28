@@ -11,11 +11,16 @@ import { CHANNEL_ID_PREFIX } from '../types'
 // show three "ESPN 2"s with one source each. The approach:
 //
 //   1. Reject matchups and nav chrome outright (never channels).
-//   2. Tokenize the label, dropping quality/region/live noise words.
-//   3. Recognize known network abbreviations via a variant map.
-//   4. Derive a display name (variant, or title-cased tokens) and a slug
-//      (alphanumeric-only, lowercased) that doubles as the category lookup
-//      key and the channel id.
+//   2. Tokenize the label.
+//   3. Recognize known MULTI-WORD names whole, before any word gets dropped
+//      as a stopword — "USA Network" and "A&E" both contain a word ("usa",
+//      "and") that's only noise in isolation, so this has to happen before
+//      step 4 or dropping it would leave "Network" / "A E" behind.
+//   4. Drop quality/region/live noise words from what's left.
+//   5. Recognize known network abbreviations via a variant map.
+//   6. Derive a display name (variant, an all-caps source token kept as-is,
+//      or title-cased tokens otherwise) and a slug (alphanumeric-only,
+//      lowercased) that doubles as the category lookup key and channel id.
 //
 // See docs/PLANNING/2026-09-28-live-channels-guide for the source rulings
 // this encodes (channel-token retention, matchup regex precedence, etc).
@@ -92,7 +97,7 @@ const NEWS_SLUGS = new Set([
 const ENTERTAINMENT_SLUGS = new Set([
   'abc', 'cbs', 'nbc', 'fox', 'amc', 'hgtv', 'tlc', 'bravo', 'e', 'fx', 'fxx',
   'paramountnetwork', 'comedycentral', 'disneychannel', 'nickelodeon',
-  'cartoonnetwork', 'history', 'discovery', 'foodnetwork',
+  'cartoonnetwork', 'history', 'discovery', 'foodnetwork', 'ae',
 ])
 
 function categoryFor(slug: string): ChannelCategory {
@@ -118,9 +123,39 @@ function titleCase(token: string): string {
   return token.length === 0 ? token : token.charAt(0).toUpperCase() + token.slice(1)
 }
 
-/** A short (<=4 char) word that was all-uppercase in the source label — an abbreviation to preserve as-is. */
-function isSourceAbbreviation(raw: string): boolean {
-  return raw.length <= 4 && /[a-z]/i.test(raw) && raw === raw.toUpperCase()
+/**
+ * A word that was all-uppercase in the source label — an abbreviation or
+ * brand name to preserve as-is, regardless of length ("MSNBC", "ESPNU", not
+ * just short ones like "CNN"). Punctuation around the letters/digits doesn't
+ * count against it (only the letters/digits themselves need to be upper).
+ */
+function isSourceAllCaps(raw: string): boolean {
+  const stripped = raw.replace(/[^a-zA-Z0-9]/g, '')
+  if (stripped.length < 2) return false
+  if (!/[a-z]/i.test(stripped)) return false
+  return stripped === stripped.toUpperCase()
+}
+
+/**
+ * Known multi-word names that must be recognized whole, before the
+ * drop-word pass — otherwise a word that's only a stopword in isolation
+ * ("usa", "and") shreds a name where it's actually part of the brand
+ * ("USA Network", "A&E" post-& -expansion is "A and E"). Matched as a
+ * PREFIX against the label's cleaned tokens; anything after the known
+ * name (a region/quality suffix, a repeated country tag) is discarded —
+ * the known name fully determines the channel's identity.
+ */
+const KNOWN_MULTIWORD_NAMES: ReadonlyArray<{ tokens: readonly string[]; name: string }> = [
+  { tokens: ['usa', 'network'], name: 'USA Network' },
+  { tokens: ['a', 'and', 'e'], name: 'A&E' },
+]
+
+function matchKnownMultiwordName(pairs: readonly WordPair[]): string | null {
+  for (const known of KNOWN_MULTIWORD_NAMES) {
+    if (pairs.length < known.tokens.length) continue
+    if (known.tokens.every((t, i) => pairs[i].clean === t)) return known.name
+  }
+  return null
 }
 
 export function canonicalChannel(label: string): { channelId: string; name: string; category: ChannelCategory } | null {
@@ -137,6 +172,13 @@ export function canonicalChannel(label: string): { channelId: string; name: stri
   if (pairs.length === 0) return null
   if (pairs.every((p) => NAV_WORDS.has(p.clean))) return null
 
+  const knownName = matchKnownMultiwordName(pairs)
+  if (knownName !== null) {
+    const slug = knownName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (slug.length === 0) return null
+    return { channelId: `${CHANNEL_ID_PREFIX}${slug}`, name: knownName, category: categoryFor(slug) }
+  }
+
   const kept = pairs.filter((p) => !DROP_WORDS.has(p.clean))
   if (kept.length === 0) return null
   if (kept.length > 5) return null
@@ -144,7 +186,7 @@ export function canonicalChannel(label: string): { channelId: string; name: stri
   const joined = kept.map((p) => p.clean).join(' ')
   const variant = VARIANT_MAP[joined]
 
-  const displayName = variant ?? kept.map((p) => (isSourceAbbreviation(p.raw) ? p.raw.toUpperCase() : titleCase(p.clean))).join(' ')
+  const displayName = variant ?? kept.map((p) => (isSourceAllCaps(p.raw) ? p.raw.toUpperCase() : titleCase(p.clean))).join(' ')
 
   const slug = displayName.toLowerCase().replace(/[^a-z0-9]/g, '')
   if (slug.length === 0) return null
