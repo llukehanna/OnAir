@@ -32,7 +32,10 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#000000',
+    // Traffic lights sit inside the renderer's own top bar.
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 20, y: 22 },
+    backgroundColor: '#0b0b0c',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
