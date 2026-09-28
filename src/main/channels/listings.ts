@@ -253,6 +253,15 @@ const tvmazeCache = new Map<string, TvmazeCacheEntry>()
  * window over one transient failure.
  */
 export const fetchTvmazeCached: TvmazeFetcher = async (dates, fetchFn = fetch, now = Date.now()) => {
+  // Bound the cache to the rolling window actually in use — buildGuide only
+  // ever asks for [today, tomorrow], so once a date falls out of that window
+  // (yesterday's "today") it's never going to be requested again and should
+  // be evicted, not held onto for the life of the process.
+  const requestedDates = new Set(dates)
+  for (const cachedDate of tvmazeCache.keys()) {
+    if (!requestedDates.has(cachedDate)) tvmazeCache.delete(cachedDate)
+  }
+
   const results = await Promise.all(
     dates.map(async (date): Promise<TvmazeEpisode[]> => {
       const cached = tvmazeCache.get(date)

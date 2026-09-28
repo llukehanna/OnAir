@@ -56,6 +56,10 @@ describe('canonicalChannel', () => {
     expect(canonicalChannel('All Channels')).toBeNull()
   })
 
+  it('returns null for the "watch now" navigation phrase', () => {
+    expect(canonicalChannel('Watch Now')).toBeNull()
+  })
+
   it('strips East and categorizes HGTV as entertainment', () => {
     const result = canonicalChannel('HGTV East')
     expect(result?.name).toBe('HGTV')

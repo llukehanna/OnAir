@@ -41,7 +41,7 @@ const DROP_WORDS = new Set([
 // category lists below (golfchannel, tennischannel, disneychannel).
 
 /** Bare labels that are nav chrome, never a channel. */
-const NAV_WORDS = new Set(['home', 'schedule', 'login', 'signup', 'menu', 'more', 'all', 'channels'])
+const NAV_WORDS = new Set(['home', 'schedule', 'login', 'signup', 'menu', 'more', 'all', 'channels', 'watch', 'now'])
 
 /**
  * A label matching this is a game matchup ("Lakers vs Celtics", "Rams @
