@@ -112,9 +112,9 @@ Some bugs taught more than the features they broke:
 ## Status
 
 - Works end to end against the fixture source: discovery, ranking, playback, failover across candidates and re-extraction, continuity, diagnostics. The embedded-player rung is covered by unit tests, since the fixture has no embed page
-- 527 tests across 32 suites, plus 7 real-decoder browser tests
+- 538 tests across 32 suites, plus 7 real-decoder browser tests
 - macOS only; not packaged or signed for distribution
-- Game cards show teams, status, and start time; live scores aren't stored yet
+- Game tiles show ESPN logos, team colors, live score and clock, refreshed at the 60-second live poll
 
 ## License
 
