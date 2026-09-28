@@ -68,6 +68,12 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  // Packaged builds get the icon from the bundle; in dev the Dock would
+  // otherwise show Electron's default.
+  if (is.dev && process.platform === 'darwin') {
+    app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
+  }
+
   // 0. CORS injection — MUST be before window creation
   setupCors()
 

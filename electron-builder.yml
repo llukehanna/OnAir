@@ -1,7 +1,7 @@
 appId: com.onair.app
 productName: OnAir
 directories:
-  buildResources: build
+  buildResources: resources
 files:
   - out/**/*
 mac:

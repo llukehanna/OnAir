@@ -8,6 +8,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "npm run build && electron-builder",
+    "install:local": "sh scripts/install-local.sh",
+    "icon": "sh scripts/render-icon.sh",
     "postinstall": "electron-builder install-app-deps",
     "setup:browser": "playwright install chromium",
     "test": "ELECTRON_RUN_AS_NODE=1 electron ./node_modules/jest/bin/jest.js",
