@@ -194,7 +194,15 @@ declare global {
         details?: Record<string, unknown>
       }) => Promise<void>
 
+      // Channels + guide
+      getChannels: () => Promise<Channel[]>
+      /** Runs a discovery pass now and resolves with the refreshed list. */
+      refreshChannels: () => Promise<Channel[]>
+      getGuide: () => Promise<GuideData>
+
       // Push subscriptions (return unsubscribe function)
+      onChannelsUpdated: (cb: (channels: Channel[]) => void) => () => void
+      onGuideUpdated: (cb: (guide: GuideData) => void) => () => void
       /** isStale is true when the last successful ESPN poll is over 5 minutes old. */
       onGamesUpdated: (cb: (update: { games: Game[]; isStale: boolean }) => void) => () => void
       onPlaybackEvent: (cb: (event: PlaybackEvent) => void) => () => void
