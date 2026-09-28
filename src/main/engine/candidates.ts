@@ -86,9 +86,12 @@ export async function collectAndRankCandidates(
 
       // Process results immediately as they arrive (Step 3 inline)
       for (const raw of raws) {
+        // Prefer the adapter-reported listing text (matchText) over the raw
+        // stream URL: a CDN path never names teams, so URL-only matching
+        // silently dropped every non-event_first source's candidate.
         const matcherConfidence = source.classification === 'event_first'
           ? 1.0
-          : matchGame(game, raw.streamUrl)
+          : matchGame(game, raw.matchText ?? raw.streamUrl)
         if (matcherConfidence < 0.5) continue
         const finalConfidence = raw.extractionConfidence * matcherConfidence
         pipeline.push({
