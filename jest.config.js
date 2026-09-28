@@ -15,7 +15,10 @@ module.exports = {
   testMatch: ['**/tests/**/*.test.ts'],
   // Abandoned agent worktrees contain full stale copies of tests/ — without
   // this, a run executes every historical copy alongside the real suite.
-  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/worktrees/', '/out/', '/tests/browser/'],
+  // Anchored to <rootDir> so it skips only worktrees nested under this
+  // checkout: unanchored, it also matched a worktree's own path, and a run
+  // from inside a worktree found no tests at all.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/\\.claude/worktrees/', '/out/', '/tests/browser/'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.node.json' }],
