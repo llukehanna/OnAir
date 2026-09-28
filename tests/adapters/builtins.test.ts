@@ -205,6 +205,98 @@ describe('InterceptAdapter', () => {
 })
 
 // ---------------------------------------------------------------------------
+// InterceptAdapter.listChannels — bounded wait for client-rendered anchors
+// (I1): the three real configured sources render their channel cards after
+// 'domcontentloaded', so listChannels must give the page a chance to finish
+// before scanning, never scan immediately, and never hang past the bound.
+// ---------------------------------------------------------------------------
+
+describe('InterceptAdapter.listChannels bounded wait', () => {
+  const channelConfig: InterceptAdapterConfig = {
+    ...testConfig,
+    channels: { listUrl: 'https://test.example/channels', linkPatterns: [/^\/channel\//i] },
+  }
+
+  function makeSlowRenderPage(renderAfterCalls: number): { page: Page; waitForTimeout: jest.Mock } {
+    let evaluateCalls = 0
+    const waitForTimeout = jest.fn(async () => {})
+
+    const evaluate = jest.fn(async () => {
+      evaluateCalls++
+      // Calls made while polling ask for the flat href list; only once
+      // "rendered" does one contain a matching channel path. The final
+      // call (collectChannelAnchors, after the poll loop breaks) wants the
+      // richer {url, text} shape.
+      if (evaluateCalls <= renderAfterCalls) return [] as string[]
+      if (evaluateCalls === renderAfterCalls + 1) return ['https://test.example/channel/espn']
+      return [{ url: 'https://test.example/channel/espn', text: 'ESPN' }]
+    })
+
+    const page = {
+      goto: jest.fn(async () => null),
+      url: jest.fn(() => 'https://test.example/channels'),
+      title: jest.fn(async () => 'Test Source'),
+      evaluate,
+      waitForTimeout,
+      waitForLoadState: jest.fn(async () => {}),
+      close: jest.fn(async () => {}),
+    } as unknown as Page
+
+    return { page, waitForTimeout }
+  }
+
+  it('does not scan before anchors render — polls until a matching one appears', async () => {
+    const { page, waitForTimeout } = makeSlowRenderPage(3)
+    const { pool } = makeFakePool(page)
+    const adapter = new TestAdapter(channelConfig)
+
+    const result = await adapter.listChannels(pool)
+
+    expect(result).toEqual([{ label: 'ESPN', url: 'https://test.example/channel/espn' }])
+    // It had to poll more than once before the anchor appeared.
+    expect(waitForTimeout.mock.calls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('gives the network a further chance to settle via waitForLoadState(networkidle)', async () => {
+    const { page } = makeSlowRenderPage(1)
+    const { pool } = makeFakePool(page)
+    const adapter = new TestAdapter(channelConfig)
+
+    await adapter.listChannels(pool)
+
+    expect(page.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 5_000 })
+  })
+
+  it('returns [] rather than hanging when no anchor ever matches', async () => {
+    // Fakes time passing 300ms per poll tick so the 5s poll bound elapses
+    // without the test actually waiting 5 real seconds.
+    let fakeNow = 0
+    const dateSpy = jest.spyOn(Date, 'now').mockImplementation(() => {
+      fakeNow += 300
+      return fakeNow
+    })
+    try {
+      const evaluate = jest.fn(async () => [] as string[])
+      const page = {
+        goto: jest.fn(async () => null),
+        url: jest.fn(() => 'https://test.example/channels'),
+        title: jest.fn(async () => 'Test Source'),
+        evaluate,
+        waitForTimeout: jest.fn(async () => {}),
+        waitForLoadState: jest.fn(async () => {}),
+        close: jest.fn(async () => {}),
+      } as unknown as Page
+      const { pool } = makeFakePool(page)
+      const adapter = new TestAdapter(channelConfig)
+
+      expect(await adapter.listChannels(pool)).toEqual([])
+    } finally {
+      dateSpy.mockRestore()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Built-in source coverage
 // ---------------------------------------------------------------------------
 
