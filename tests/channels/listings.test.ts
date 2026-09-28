@@ -227,6 +227,25 @@ describe('mergePrograms', () => {
 
     expect(merged.map((p) => p.title)).toEqual(['C', 'B', 'A'])
   })
+
+  it('de-duplicates programs sharing the same (channelId, start, title), keeping one', () => {
+    // e.g. TVmaze reporting the same episode under two network-name
+    // spellings that both resolve (via resolveProgramChannels) to the same
+    // known channel — the renderer must never see the same program twice on
+    // one channel.
+    const show: GuideProgram = {
+      channelId: 'ch:foxnews',
+      title: 'The Story Is with Elex Michaelson',
+      start: 1790654400000,
+      end: 1790654400000 + 60 * 60_000,
+      kind: 'show',
+    }
+    const duplicateShow: GuideProgram = { ...show }
+
+    const merged = mergePrograms([], [show, duplicateShow])
+
+    expect(merged).toHaveLength(1)
+  })
 })
 
 // ---------------------------------------------------------------------------

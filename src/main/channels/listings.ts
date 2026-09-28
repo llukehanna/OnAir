@@ -167,20 +167,45 @@ function resolveProgramChannels(programs: GuideProgram[], knownIds: Set<string>)
 }
 
 /**
+ * Programs sharing the same (channelId, start, title) are the same
+ * broadcast reported twice — e.g. two TVmaze network-name spellings that
+ * both resolve, via resolveProgramChannels, to the same known channel.
+ * Without this, the guide (and the renderer, which keys rows on exactly
+ * this triple) shows the same program twice on one channel. Keeps the
+ * first occurrence.
+ */
+function dedupePrograms(programs: GuideProgram[]): GuideProgram[] {
+  const seen = new Set<string>()
+  const out: GuideProgram[] = []
+
+  for (const program of programs) {
+    const key = `${program.channelId}\u0000${program.start}\u0000${program.title}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(program)
+  }
+
+  return out
+}
+
+/**
  * Combines games and shows into one guide: a show overlapping a game on the
  * SAME channel loses — the game is what's actually airing — while a show on
  * another channel, or one that doesn't overlap, survives. Sorted by channel
- * id then start time so a channel's row reads left to right in order.
+ * id then start time so a channel's row reads left to right in order, then
+ * de-duplicated by (channelId, start, title) — see dedupePrograms.
  */
 export function mergePrograms(games: GuideProgram[], shows: GuideProgram[]): GuideProgram[] {
   const keptShows = shows.filter(
     (show) => !games.some((game) => game.channelId === show.channelId && overlaps(game, show))
   )
 
-  return [...games, ...keptShows].sort((a, b) => {
+  const combined = [...games, ...keptShows].sort((a, b) => {
     if (a.channelId !== b.channelId) return a.channelId < b.channelId ? -1 : 1
     return a.start - b.start
   })
+
+  return dedupePrograms(combined)
 }
 
 /** Local YYYY-MM-DD for a date — TVmaze's `date` param is calendar-day, not UTC. */
