@@ -185,6 +185,55 @@ describe('canonicalChannel', () => {
     // lookup tolerates the suffix, not identity.
     expect(canonicalChannel('Fox News Channel')?.channelId).not.toBe(canonicalChannel('Fox News')?.channelId)
   })
+
+  // -------------------------------------------------------------------------
+  // E2E fix round: ESPN+ is a distinct service from ESPN (a "+" is a "plus"
+  // slug token, not punctuation to discard); a known channel's display name
+  // comes from a canonical-name table instead of whichever source wrote it
+  // last; and a label shaped "ABBR (Full Name)" canonicalizes to the
+  // parenthetical when ABBR really is Full Name's initials, but other
+  // parentheticals are just dropped.
+  // -------------------------------------------------------------------------
+
+  it('keeps ESPN+ apart from ESPN as its own slug', () => {
+    const result = canonicalChannel('ESPN+ USA')
+    expect(result).toEqual({ channelId: 'ch:espnplus', name: 'ESPN+', category: 'sports' })
+  })
+
+  it('leaves bare ESPN on its own channel id', () => {
+    const result = canonicalChannel('ESPN')
+    expect(result).toEqual({ channelId: 'ch:espn', name: 'ESPN', category: 'sports' })
+  })
+
+  it('gives "AE" the canonical "A&E" display name instead of its source casing', () => {
+    const result = canonicalChannel('AE')
+    expect(result).toEqual({ channelId: 'ch:ae', name: 'A&E', category: 'entertainment' })
+  })
+
+  it('agrees with "AE" on the same channel id and name for "A&E USA"', () => {
+    const result = canonicalChannel('A&E USA')
+    expect(result).toEqual({ channelId: 'ch:ae', name: 'A&E', category: 'entertainment' })
+  })
+
+  it('canonicalizes "AHC (American Heroes Channel)" to its parenthetical full name', () => {
+    const result = canonicalChannel('AHC (American Heroes Channel)')
+    expect(result).toEqual({
+      channelId: 'ch:americanheroeschannel',
+      name: 'American Heroes Channel',
+      category: 'other',
+    })
+  })
+
+  it('agrees with the AHC-prefixed label on the same channel id for the bare full name', () => {
+    const result = canonicalChannel('American Heroes Channel')
+    expect(result?.channelId).toBe('ch:americanheroeschannel')
+    expect(result?.name).toBe('American Heroes Channel')
+  })
+
+  it('drops a non-abbreviation parenthetical, keeping only the prefix', () => {
+    const result = canonicalChannel('CNN (Live)')
+    expect(result).toEqual({ channelId: 'ch:cnn', name: 'CNN', category: 'news' })
+  })
 })
 
 // ---------------------------------------------------------------------------
