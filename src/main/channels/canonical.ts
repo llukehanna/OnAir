@@ -85,7 +85,7 @@ const VARIANT_MAP: Record<string, string> = {
 }
 
 const SPORTS_SLUGS = new Set([
-  'espn', 'espn2', 'espnu', 'espnews', 'fs1', 'fs2', 'nflnetwork', 'nflredzone',
+  'espn', 'espnplus', 'espn2', 'espnu', 'espnews', 'fs1', 'fs2', 'nflnetwork', 'nflredzone',
   'mlbnetwork', 'nbatv', 'nhlnetwork', 'cbssportsnetwork', 'bigtennetwork',
   'secnetwork', 'accnetwork', 'golfchannel', 'tennischannel', 'beinsports',
   'nbcsn', 'tnt', 'tbs', 'trutv', 'usanetwork',
@@ -137,9 +137,32 @@ interface WordPair {
   clean: string
 }
 
-/** Strips everything but letters, digits and hyphens (hyphens are kept — "tv-hd" is one token). */
+/** Strips everything but letters, digits and hyphens (hyphens are kept — "tv-hd" is one token).
+ *  A "+" is a "plus" slug token, not punctuation to discard — "ESPN+" must slug to
+ *  "espnplus", distinct from "espn", since ESPN+ is a different service from ESPN. */
 function cleanWord(word: string): string {
-  return word.toLowerCase().replace(/[^a-z0-9-]/g, '')
+  return word.toLowerCase().replace(/\+/g, 'plus').replace(/[^a-z0-9-]/g, '')
+}
+
+/** Same "+" -> "plus" substitution as cleanWord, applied when slugging a
+ *  whole display name (which may still carry punctuation cleanWord already
+ *  stripped from individual tokens). */
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/\+/g, 'plus').replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Canonical display names for channels whose slug is already known, keyed by
+ * slug. A channel's display name must not depend on which source's label
+ * happened to produce it last — one source might write "AE", another
+ * "A&E USA"; both resolve to slug "ae" and must show the same name.
+ */
+const CANONICAL_NAMES: Record<string, string> = {
+  ae: 'A&E',
+}
+
+function canonicalDisplayName(name: string, slug: string): string {
+  return CANONICAL_NAMES[slug] ?? name
 }
 
 /** Title-cases a single cleaned token, e.g. 'sox' -> 'Sox'. */
@@ -182,11 +205,42 @@ function matchKnownMultiwordName(pairs: readonly WordPair[]): string | null {
   return null
 }
 
+/**
+ * Handles a trailing "PREFIX (INNER)" shape ("AHC (American Heroes
+ * Channel)", "CNN (Live)"). When PREFIX is really an abbreviation of INNER —
+ * its letters match INNER's word initials — the parenthetical fully
+ * determines the channel's identity, so the caller should recurse on INNER
+ * alone. Otherwise the parenthetical is just a qualifier and gets dropped,
+ * keeping PREFIX. Labels with no trailing parenthetical pass through
+ * unchanged.
+ */
+function stripAbbreviationParenthetical(label: string): { recurseOn: string } | { keep: string } {
+  const match = label.match(/^(.*?)\s*\(([^()]+)\)\s*$/)
+  if (!match) return { keep: label }
+
+  const [, prefix, inner] = match
+  const abbr = prefix.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+  const acronym = inner
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-zA-Z0-9]/g, ''))
+    .filter((w) => w.length > 0)
+    .map((w) => w[0]!.toUpperCase())
+    .join('')
+
+  if (abbr.length >= 2 && abbr === acronym) return { recurseOn: inner.trim() }
+  return { keep: prefix.trim() }
+}
+
 export function canonicalChannel(label: string): { channelId: string; name: string; category: ChannelCategory } | null {
   if (label.trim().length === 0) return null
   if (isMatchup(label)) return null
 
-  const expanded = label.replace(/&/g, ' and ')
+  const parenResult = stripAbbreviationParenthetical(label)
+  if ('recurseOn' in parenResult) return canonicalChannel(parenResult.recurseOn)
+  const workingLabel = parenResult.keep
+
+  const expanded = workingLabel.replace(/&/g, ' and ')
   const rawWords = expanded.split(/\s+/).filter((w) => w.length > 0)
 
   const pairs: WordPair[] = rawWords
@@ -198,9 +252,9 @@ export function canonicalChannel(label: string): { channelId: string; name: stri
 
   const knownName = matchKnownMultiwordName(pairs)
   if (knownName !== null) {
-    const slug = knownName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const slug = slugify(knownName)
     if (slug.length === 0) return null
-    return { channelId: `${CHANNEL_ID_PREFIX}${slug}`, name: knownName, category: categoryFor(slug) }
+    return { channelId: `${CHANNEL_ID_PREFIX}${slug}`, name: canonicalDisplayName(knownName, slug), category: categoryFor(slug) }
   }
 
   const kept = pairs.filter((p) => !DROP_WORDS.has(p.clean))
@@ -212,10 +266,10 @@ export function canonicalChannel(label: string): { channelId: string; name: stri
 
   const displayName = variant ?? kept.map((p) => (isSourceAllCaps(p.raw) ? p.raw.toUpperCase() : titleCase(p.clean))).join(' ')
 
-  const slug = displayName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const slug = slugify(displayName)
   if (slug.length === 0) return null
 
-  return { channelId: `${CHANNEL_ID_PREFIX}${slug}`, name: displayName, category: categoryFor(slug) }
+  return { channelId: `${CHANNEL_ID_PREFIX}${slug}`, name: canonicalDisplayName(displayName, slug), category: categoryFor(slug) }
 }
 
 // ---------------------------------------------------------------------------
