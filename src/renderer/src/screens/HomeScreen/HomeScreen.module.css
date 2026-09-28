@@ -1,64 +1,95 @@
-/* ============================================================
-   HomeScreen — game rails with Live Now, Starting Soon, Recently Ended
-   ============================================================ */
-
 .container {
-  padding: var(--space-6);
-  height: 100%;
-  overflow-y: auto;
+  position: relative;
+  min-height: 100%;
+  padding-bottom: 72px;
 }
 
-/* ── Section ──────────────────────────────────────────────── */
-
-.section {
-  margin-bottom: var(--space-8);
+.rows {
+  position: relative;
+  z-index: 1;
+  /* Rows begin inside the hero's fade so the page reads as one surface. */
+  margin-top: -72px;
 }
 
-.section:last-child {
-  margin-bottom: 0;
+.rows > section:first-child {
+  margin-top: 0;
 }
 
-/* ── Section heading ──────────────────────────────────────── */
+.banner {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--topbar-h) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: inset 0 0 0 1px var(--glass-line);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
 
-.sectionHeading {
+/* Empty */
+
+.empty {
+  min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
-  margin: 0 0 var(--space-4) 0;
-  line-height: var(--line-height-tight);
-}
-
-.sectionHeadingSecondary {
-  color: var(--text-secondary);
-}
-
-/* Live dot before "Live Now" heading */
-.liveDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--status-live);
-  flex-shrink: 0;
-  animation: pulse-live 1.4s ease-in-out infinite;
-}
-
-/* ── Game grid ────────────────────────────────────────────── */
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-4);
-}
-
-/* ── State messages ───────────────────────────────────────── */
-
-.message {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-regular);
-  color: var(--text-secondary);
+  justify-content: center;
   text-align: center;
-  margin: var(--space-16) auto 0;
+  padding: var(--topbar-h) var(--gutter) 0;
+  animation: fade-up var(--dur-3) var(--ease) both;
+}
+
+.emptyTally {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04);
+  margin-bottom: 26px;
+}
+
+.emptyTitle {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+}
+
+.emptyText {
+  margin-top: 10px;
+  max-width: 420px;
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+/* Skeleton */
+
+.skeletonRow {
+  margin-top: 36px;
+  padding: 0 var(--gutter);
+}
+
+.skeletonRow:first-of-type {
+  margin-top: -72px;
+  position: relative;
+}
+
+.skeletonTitle {
+  display: block;
+  width: 140px;
+  height: 20px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  background: #18181b;
+}
+
+.skeletonTiles {
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
 }

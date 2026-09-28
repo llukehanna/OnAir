@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Sidebar } from './components/Sidebar/Sidebar'
+import React, { useRef, useState } from 'react'
+import { TopBar } from './components/TopBar/TopBar'
 import { HomeScreen } from './screens/HomeScreen/HomeScreen'
 import { PlayerScreen } from './screens/PlayerScreen/PlayerScreen'
 import { DiagnosticsScreen } from './screens/DiagnosticsScreen/DiagnosticsScreen'
@@ -12,6 +12,8 @@ export default function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('home')
   const [selectedLeague, setSelectedLeague] = useState<LeagueId | null>(null)
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null)
+  const [scrolled, setScrolled] = useState(false)
+  const mainRef = useRef<HTMLElement>(null)
 
   const {
     playGame,
@@ -26,48 +28,67 @@ export default function App(): React.JSX.Element {
     liveLatency,
   } = usePlayback()
 
+  const go = (next: Screen) => {
+    setScreen(next)
+    mainRef.current?.scrollTo({ top: 0 })
+    setScrolled(false)
+  }
+
   const handleGameClick = (gameId: string) => {
     setSelectedGameId(gameId)
     setScreen('player')
     playGame(gameId)
   }
 
-  const handleBack = () => {
+  const leavePlayer = (next: Screen) => {
     stopPlayback()
     setSelectedGameId(null)
-    setScreen('home')
+    go(next)
+  }
+
+  if (screen === 'player') {
+    return (
+      <PlayerScreen
+        gameId={selectedGameId}
+        video0Ref={video0Ref}
+        video1Ref={video1Ref}
+        slot0IsActive={slot0IsActive}
+        playerState={playerState}
+        errorReason={errorReason}
+        activeCandidateId={activeCandidateId}
+        liveLatency={liveLatency}
+        onSelectCandidate={selectCandidate}
+        onBack={() => leavePlayer('home')}
+        onOpenDiagnostics={() => leavePlayer('diagnostics')}
+        onRetry={() => {
+          if (selectedGameId) playGame(selectedGameId)
+        }}
+      />
+    )
   }
 
   return (
     <div className={styles.shell}>
-      <Sidebar
-        screen={screen}
-        selectedLeague={selectedLeague}
-        onScreenChange={setScreen}
-        onLeagueChange={setSelectedLeague}
+      <TopBar
+        onDiagnostics={screen === 'diagnostics'}
+        league={selectedLeague}
+        onLeague={(league) => {
+          setSelectedLeague(league)
+          go('home')
+        }}
+        onOpenDiagnostics={() => go('diagnostics')}
+        onHome={() => {
+          setSelectedLeague(null)
+          go('home')
+        }}
+        scrolled={scrolled}
       />
-      <main className={styles.main}>
-        {screen === 'home' && (
-          <HomeScreen selectedLeague={selectedLeague} onGameClick={handleGameClick} />
-        )}
-        {screen === 'player' && (
-          <PlayerScreen
-            gameId={selectedGameId}
-            video0Ref={video0Ref}
-            video1Ref={video1Ref}
-            slot0IsActive={slot0IsActive}
-            playerState={playerState}
-            errorReason={errorReason}
-            activeCandidateId={activeCandidateId}
-            liveLatency={liveLatency}
-            onSelectCandidate={selectCandidate}
-            onBack={handleBack}
-            onRetry={() => {
-              console.log('[App] retry clicked, gameId:', selectedGameId)
-              if (selectedGameId) playGame(selectedGameId)
-            }}
-          />
-        )}
+      <main
+        ref={mainRef}
+        className={styles.main}
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 8)}
+      >
+        {screen === 'home' && <HomeScreen selectedLeague={selectedLeague} onGameClick={handleGameClick} />}
         {screen === 'diagnostics' && <DiagnosticsScreen />}
       </main>
     </div>

@@ -1,0 +1,203 @@
+.tile {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  /* Chromium's UA sheet gives buttons align-items: flex-start. */
+  align-items: stretch;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  isolation: isolate;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), var(--shadow-1);
+  transition: transform var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+
+.lg {
+  width: 316px;
+  height: 178px;
+}
+
+.md {
+  width: 248px;
+  height: 140px;
+}
+
+/* Team color lives at the edges; the center stays dark so logos read. */
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, transparent 38%, rgba(8, 8, 10, 0.86) 100%),
+    radial-gradient(60% 75% at 50% 42%, rgba(8, 8, 10, 0.55), transparent 100%),
+    linear-gradient(115deg, var(--away) 0%, var(--away) 49.8%, var(--home) 50.2%, var(--home) 100%);
+  transition: transform var(--dur-3) var(--ease), filter var(--dur-2) var(--ease);
+  filter: saturate(0.92) brightness(0.86);
+}
+
+.tile:hover {
+  transform: translateY(-4px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), var(--shadow-2);
+}
+
+.tile:hover .bg {
+  transform: scale(1.04);
+  filter: saturate(1) brightness(0.95);
+}
+
+.tile:active {
+  transform: translateY(-2px) scale(0.99);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 12px 0;
+  min-height: 30px;
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: pulse-live 2s var(--ease-out) infinite;
+}
+
+.league {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: -6px;
+}
+
+.md .stage {
+  gap: 14px;
+  margin-top: -8px;
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.md .score {
+  font-size: 24px;
+}
+
+.dash {
+  margin: 0 7px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.trail {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.at {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 14px 12px;
+}
+
+.names {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.md .names {
+  font-size: 13px;
+}
+
+.atSmall {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.66);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.play {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding-left: 2px;
+  background: var(--ink);
+  color: #0b0b0c;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+
+.md .play {
+  width: 30px;
+  height: 30px;
+}
+
+.tile:hover .play,
+.tile:focus-visible .play {
+  opacity: 1;
+  transform: none;
+}
+
+.skeleton {
+  flex: none;
+  display: block;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, #141416 25%, #1d1d20 50%, #141416 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
