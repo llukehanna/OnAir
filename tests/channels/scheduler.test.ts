@@ -70,12 +70,12 @@ describe('discoverOnce', () => {
     expect(links[0].url).toBe('https://src_a.test/espn2')
   })
 
-  it('prunes links older than 24h after this run\'s upserts', async () => {
+  it('prunes a source\'s own links older than 24h once its pass lists something', async () => {
     const db = createTestDbWithMigrations()
     addSource(makeSource('src_a'), db)
     addSource(makeSource('src_stale'), db)
 
-    // A link from 2 days ago that no adapter refreshes this round.
+    // A link from 2 days ago that this round's src_stale pass no longer lists.
     const { upsertChannelLinks } = await import('../../src/main/db/queries/channels')
     upsertChannelLinks(
       'src_stale',
@@ -84,12 +84,42 @@ describe('discoverOnce', () => {
       db
     )
 
-    const adapters = [makeAdapter('src_a', async () => [{ label: 'CNN', url: 'https://src_a.test/cnn' }])]
+    const adapters = [
+      makeAdapter('src_a', async () => [{ label: 'CNN', url: 'https://src_a.test/cnn' }]),
+      // src_stale's pass DID list something this round (≥1) — just not ch:old
+      // — so its own stale link is fair game for pruning.
+      makeAdapter('src_stale', async () => [{ label: 'BBC', url: 'https://src_stale.test/bbc' }]),
+    ]
 
     const channels = await discoverOnce(fakePool, () => adapters, db)
 
-    expect(channels.map((c) => c.channelId)).toEqual(['ch:cnn'])
+    expect(channels.map((c) => c.channelId).sort()).toEqual(['ch:bbc', 'ch:cnn'])
     expect(getChannels(db).some((c) => c.channelId === 'ch:old')).toBe(false)
+  })
+
+  it('keeps a source\'s stale links past 24h when its pass returns [] (blocked/failed)', async () => {
+    const db = createTestDbWithMigrations()
+    addSource(makeSource('src_a'), db)
+    addSource(makeSource('src_blocked'), db)
+
+    const { upsertChannelLinks } = await import('../../src/main/db/queries/channels')
+    upsertChannelLinks(
+      'src_blocked',
+      [{ channelId: 'ch:old', name: 'Old', category: 'other', url: 'https://old.test/x', label: 'Old' }],
+      Date.now() - 48 * 60 * 60_000,
+      db
+    )
+
+    const adapters = [
+      makeAdapter('src_a', async () => [{ label: 'CNN', url: 'https://src_a.test/cnn' }]),
+      // A blocked/failed pass returns [] — not evidence ch:old is gone.
+      makeAdapter('src_blocked', async () => []),
+    ]
+
+    const channels = await discoverOnce(fakePool, () => adapters, db)
+
+    expect(channels.map((c) => c.channelId).sort()).toEqual(['ch:cnn', 'ch:old'])
+    expect(getChannels(db).some((c) => c.channelId === 'ch:old')).toBe(true)
   })
 
   it('does not let one adapter throwing stop the others', async () => {
