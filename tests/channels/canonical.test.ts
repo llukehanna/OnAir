@@ -166,6 +166,25 @@ describe('canonicalChannel', () => {
   it('still title-cases the fixture adapter labels (not all-caps in the source)', () => {
     expect(canonicalChannel('Fixture One HD')?.name).toBe('Fixture One')
   })
+
+  // -------------------------------------------------------------------------
+  // Category for suffixed labels: a slug that isn't itself in a category set
+  // but IS once a trailing channel/network/tv suffix is stripped should still
+  // resolve to that set's category — the id keeps the fuller spelling.
+  // -------------------------------------------------------------------------
+
+  it('categorizes "Fox News Channel" as news via suffix-tolerant category lookup', () => {
+    const result = canonicalChannel('Fox News Channel')
+    expect(result?.channelId).toBe('ch:foxnewschannel')
+    expect(result?.name).toBe('Fox News Channel')
+    expect(result?.category).toBe('news')
+  })
+
+  it('does not let suffix tolerance change the channel id itself', () => {
+    // ch:foxnewschannel stays distinct from ch:foxnews; only the category
+    // lookup tolerates the suffix, not identity.
+    expect(canonicalChannel('Fox News Channel')?.channelId).not.toBe(canonicalChannel('Fox News')?.channelId)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -214,12 +233,19 @@ describe('pickChannelLinks', () => {
 // ---------------------------------------------------------------------------
 
 describe('pickChannelLinks against captured source anchors', () => {
-  it('finds at least 20 known channels on streamsports99.ru/live-tv', () => {
-    const patterns = [/^\/live-tv\/.+__[a-z]{2}$/i]
+  it('finds at least 20 known channels on streamsports99.ru/live-tv, restricted to the US group', () => {
+    const patterns = [/^\/live-tv\/.+__us$/i]
     const result = pickChannelLinks(streamsports99Anchors, patterns)
     expect(result.length).toBeGreaterThanOrEqual(20)
     const ids = result.map((c) => canonicalChannel(c.label)?.channelId)
     expect(ids).toEqual(expect.arrayContaining(['ch:espn2', 'ch:cnn', 'ch:accnetwork', 'ch:disneychannel']))
+  })
+
+  it('excludes a non-US duplicate of a channel (I3: __uk is not __us)', () => {
+    const patterns = [/^\/live-tv\/.+__us$/i]
+    const result = pickChannelLinks(streamsports99Anchors, patterns)
+    expect(result.some((c) => c.url.endsWith('__uk'))).toBe(false)
+    expect(result.some((c) => c.label === 'ESPN' && c.url.includes('__uk'))).toBe(false)
   })
 
   it('finds at least 10 known channels on ntv.st/channels', () => {
