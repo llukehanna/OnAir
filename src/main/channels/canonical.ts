@@ -22,8 +22,9 @@ import { CHANNEL_ID_PREFIX } from '../types'
 //      or title-cased tokens otherwise) and a slug (alphanumeric-only,
 //      lowercased) that doubles as the category lookup key and channel id.
 //
-// See docs/PLANNING/2026-09-28-live-channels-guide for the source rulings
-// this encodes (channel-token retention, matchup regex precedence, etc).
+// See docs/superpowers/specs/2026-09-28-live-channels-guide-design.md for the
+// source rulings this encodes (channel-token retention, matchup regex
+// precedence, etc).
 // ---------------------------------------------------------------------------
 
 /** Tokens dropped wherever they appear — quality tags, region tags, filler. */
@@ -100,10 +101,33 @@ const ENTERTAINMENT_SLUGS = new Set([
   'cartoonnetwork', 'history', 'discovery', 'foodnetwork', 'ae',
 ])
 
-function categoryFor(slug: string): ChannelCategory {
+/** Suffixes a category set's slug might be missing relative to a fuller
+ *  source spelling — "Fox News Channel" slugs to foxnewschannel, but only
+ *  foxnews (NEWS_SLUGS' spelling) is a known category slug. Mirrors
+ *  listings.ts's CHANNEL_ID_SUFFIXES, but this tolerance is applied only to
+ *  the category lookup, never to the channel id itself: two sources
+ *  spelling a channel differently still register under their own ids
+ *  (foxnewschannel here, foxnews there) — resolveKnownChannelId in
+ *  listings.ts is what later reconciles those into one row. */
+const CATEGORY_SUFFIXES = ['channel', 'network', 'tv'] as const
+
+function categoryForExact(slug: string): ChannelCategory | null {
   if (SPORTS_SLUGS.has(slug)) return 'sports'
   if (NEWS_SLUGS.has(slug)) return 'news'
   if (ENTERTAINMENT_SLUGS.has(slug)) return 'entertainment'
+  return null
+}
+
+function categoryFor(slug: string): ChannelCategory {
+  const direct = categoryForExact(slug)
+  if (direct) return direct
+
+  for (const suffix of CATEGORY_SUFFIXES) {
+    if (!slug.endsWith(suffix) || slug.length === suffix.length) continue
+    const stripped = categoryForExact(slug.slice(0, -suffix.length))
+    if (stripped) return stripped
+  }
+
   return 'other'
 }
 
