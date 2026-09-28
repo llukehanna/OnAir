@@ -1,4 +1,5 @@
 import React from 'react'
+import { Antenna, MonitorPlay, RadioTower, ShieldCheck, Timer, type LucideIcon } from 'lucide-react'
 import { TeamLogo } from '../TeamLogo/TeamLogo'
 import { TeamWash } from '../TeamWash/TeamWash'
 import { hasScore, leader, leagueLabel, statusText, teamOf } from '../../lib/teams'
@@ -32,13 +33,14 @@ export function PlayerDrawer({ game, open, overlay, stats, children }: PlayerDra
         <section className={styles.section}>
           <h3 className={styles.heading}>Stream</h3>
           <dl className={styles.stats}>
-            <Stat label="Source" value={stats.source ?? '—'} />
-            <Stat label="Quality" value={stats.quality ?? 'Auto'} />
-            <Stat label="Behind live" value={stats.latency !== null ? `${stats.latency.toFixed(1)}s` : '—'} />
-            <Stat label="On air" value={stats.onAirSec > 0 ? formatDuration(stats.onAirSec) : '—'} />
+            <Stat icon={Antenna} label="Source" value={stats.source ?? '—'} />
+            <Stat icon={MonitorPlay} label="Quality" value={stats.quality ?? 'Auto'} />
+            <Stat icon={Timer} label="Behind live" value={stats.latency !== null ? `${stats.latency.toFixed(1)}s` : '—'} />
+            <Stat icon={RadioTower} label="On air" value={stats.onAirSec > 0 ? formatDuration(stats.onAirSec) : '—'} />
           </dl>
           {stats.failovers > 0 && (
             <p className={styles.failovers}>
+              <ShieldCheck size={15} strokeWidth={2} className={styles.failoversIcon} aria-hidden="true" />
               Recovered from {stats.failovers} failure{stats.failovers === 1 ? '' : 's'} without dropping the picture.
             </p>
           )}
@@ -61,10 +63,13 @@ export function PlayerDrawer({ game, open, overlay, stats, children }: PlayerDra
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }): React.JSX.Element {
   return (
     <div className={styles.stat}>
-      <dt>{label}</dt>
+      <dt>
+        <Icon size={12} strokeWidth={2.2} aria-hidden="true" />
+        {label}
+      </dt>
       <dd>{value}</dd>
     </div>
   )
