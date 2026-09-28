@@ -30,9 +30,59 @@ Pushed after every discovery poll.
 cb({ games: Game[], isStale: boolean })   // isStale: last successful poll > 5 min ago
 ```
 
+## Channels and guide
+
+```ts
+interface Channel {
+  channelId: string      // `ch:<slug>`, e.g. `ch:espn2`
+  name: string           // canonical display name, e.g. `ESPN2`
+  category: 'sports' | 'news' | 'entertainment' | 'other'
+  sourceCount: number    // sources currently carrying it
+  lastSeenAt: number     // Unix ms; last discovery run that listed it
+}
+
+interface GuideProgram {
+  channelId: string
+  title: string
+  subtitle?: string
+  start: number           // Unix ms
+  end: number             // Unix ms
+  kind: 'game' | 'show'
+  gameId?: string         // set when kind is 'game'
+}
+
+interface GuideData {
+  channels: Channel[]
+  programs: GuideProgram[]
+  generatedAt: number    // Unix ms
+}
+```
+
+| Call | Behaviour |
+|---|---|
+| `getChannels()` | Every channel currently known, from the `channels` table |
+| `refreshChannels()` | Runs a channel discovery pass immediately, rather than waiting for the next scheduled one, and returns the refreshed list |
+| `getGuide()` | Builds and returns a fresh `GuideData`: ESPN games (already in the DB) plus TVmaze's US schedule for today and tomorrow, merged onto their channels and windowed to roughly an hour behind through a day ahead. Never rejects |
+
+### `onChannelsUpdated(cb) → unsubscribe`
+
+Pushed after every channel discovery pass: on startup, every 30 minutes after, and whenever `refreshChannels()` runs one on demand.
+
+```ts
+cb(channels: Channel[])
+```
+
+### `onGuideUpdated(cb) → unsubscribe`
+
+Pushed after every games update, every channels update, and on its own 30-minute timer (which catches TVmaze's schedule moving on its own between those events). Concurrent triggers coalesce into one rebuild at a time; the last trigger to arrive is always the one whose result gets pushed, never an earlier, slower one finishing late.
+
+```ts
+cb(guide: GuideData)
+```
+
 ## Playback
 
-All four calls resolve to a `PlayResult`:
+All four calls resolve to a `PlayResult`. `gameId` may be a game id or a channel id (`ch:<slug>`) — a channel is a watch target exactly like a game, resolved by `src/main/engine/targets.ts`.
 
 ```ts
 type PlayResult =
@@ -50,7 +100,7 @@ type PlayResult =
 
 | Call | Behaviour |
 |---|---|
-| `playGame(gameId)` | Stops whatever is playing, then resolves the best stream: cache, then validation, then extraction |
+| `playGame(gameId)` | Stops whatever is playing, then resolves the best stream for the target: cache, then validation, then extraction |
 | `switchStream(gameId, reason?)` | Automatic failover. Leaves the current stream running and climbs the ladder in [FAILOVER.md](FAILOVER.md). `reason` is recorded against the failing source. Concurrent calls collapse into one switch |
 | `selectStream(candidateId)` | The user picked a specific candidate. It's pinned as a preference, but failover still moves off it if it dies |
 | `stopPlayback()` | Stops playback, the off-air watch, the proxy, and any embedded view |
@@ -61,7 +111,7 @@ type PlayResult =
 
 ### `getCandidatesForGame(gameId) → Promise<StreamCandidate[]>`
 
-The cached, ranked candidates for a game (what the source picker lists). Includes `candidateId`, `sourceId`, `quality`, `score` (0–1), and `streamType`.
+The cached, ranked candidates for a game or channel (what the source picker lists). Includes `candidateId`, `sourceId`, `quality`, `score` (0–1), and `streamType`.
 
 ### `onPlaybackEvent(cb) → unsubscribe`
 

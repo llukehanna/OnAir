@@ -21,6 +21,10 @@ interface SourceAdapter {
 
   getCandidateStreams(game: Game, pool: PlaywrightPool): Promise<RawStreamCandidate[]>
   getSourceHealth(pool: PlaywrightPool): Promise<HealthState>
+
+  // Optional: this source's 24/7 channels. Omit both on a source that has none.
+  listChannels?(pool: PlaywrightPool): Promise<ChannelListing[]>
+  getChannelStreams?(url: string, pool: PlaywrightPool): Promise<RawStreamCandidate[]>
 }
 ```
 
@@ -49,6 +53,26 @@ Return `[]` rather than throwing when there's nothing to offer. A throw is caugh
 - **`channel_first`** and **`mixed_aggregator`**: the source lists channels or mixed events. Each stream's text is matched against the team alias dictionary in `engine/matcher.ts`, and anything under 0.5 is dropped.
 
 The final confidence is `extractionConfidence × matchConfidence`, so both have to be high for a candidate to rank well.
+
+### Channels
+
+`listChannels` and `getChannelStreams` are optional — omit both on a source with no 24/7 channels. When present, they let the source's always-on channels (ESPN, FS1, CNN, ...) join the TV guide and become playable watch targets (`ch:<slug>` ids), exactly like games:
+
+- `listChannels(pool)` returns the source's raw listing as `{ label, url }[]` (`ChannelListing`). Adapters report labels as the source spells them; they never canonicalize. The channel discovery scheduler (`src/main/channels/scheduler.ts`) runs `canonicalChannel(label)` (`src/main/channels/canonical.ts`) on each one to get a stable cross-source `channelId`/`name`/`category`, dropping labels that turn out not to be a channel at all (a matchup, nav chrome). Return `[]`, not a throw, when the source has nothing to offer — same convention as `getCandidateStreams`.
+- `getChannelStreams(url, pool)` extracts streams for one channel's own listing URL — the channel equivalent of `getCandidateStreams`, minus any matching step. A channel candidate's match confidence is always 1.0: the link was already known to be that channel.
+
+`InterceptAdapter` implements both from one optional config field:
+
+```ts
+channels?: {
+  listUrl: string                        // page listing the source's channels
+  linkPatterns?: readonly RegExp[]       // defaults to DEFAULT_CHANNEL_LINK_PATTERNS
+}
+```
+
+`listChannels()` navigates to `listUrl`, then scans its anchors much like `getCandidateStreams` scans a listing page for a game link — except it prefers each anchor's `aria-label`, or a nearby `<h3>`, over the anchor's own text, which often also carries a country badge, a "LIVE" pill, or a "1 source" footer that would otherwise corrupt canonicalization. `linkPatterns` (tested via `pickChannelLinks()` in `src/main/channels/canonical.ts`) filters those anchors to actual channel pages, by pathname, the same way `gameLinkPatterns` filters game links.
+
+Omit `channels` entirely when the source has no flat page of channel links to scan — for example a country-picker whose channel list only renders after a click, rather than a single read-only page load. `listChannels()` then always returns `[]`, identical to an adapter that never implemented it at all.
 
 ## Three shapes of adapter
 
