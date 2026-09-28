@@ -1,10 +1,11 @@
 import Database from 'better-sqlite3'
-import type { Game, StreamCandidate, HealthState } from '../types'
+import type { Game, StreamCandidate, HealthState, WatchTarget, ChannelSourceLink } from '../types'
 import type { SourceAdapter, RawStreamCandidate } from '../adapters/base'
 import type { PlaywrightPool } from '../adapters/pool'
 import { getAllAdapters } from '../adapters/registry'
 import { getSourceById } from '../db/queries/sources'
 import { getReliability } from '../db/queries/reliability'
+import { getChannelLinks } from '../db/queries/channels'
 import { matchGame } from './matcher'
 import { probeCandidate } from './prober'
 import { computeScore } from './scoring'
@@ -26,8 +27,31 @@ interface PipelineCandidate {
 // collectAndRankCandidates
 // ---------------------------------------------------------------------------
 
+type GetChannelLinksFn = (channelId: string, db?: Database.Database) => ChannelSourceLink[]
+
 /**
- * The core candidate collection pipeline:
+ * The core candidate collection pipeline. Dispatches on the target kind: a
+ * game rides the pipeline below unchanged; a channel gets the simpler
+ * link-based pipeline in collectChannelCandidates.
+ *
+ * Returns [] (not throw) if all adapters fail.
+ */
+export async function collectAndRankCandidates(
+  target: WatchTarget,
+  pool?: PlaywrightPool,
+  db?: Database.Database,
+  fetchFn?: typeof fetch,
+  adaptersFn?: () => SourceAdapter[],
+  linksFn?: GetChannelLinksFn
+): Promise<StreamCandidate[]> {
+  if (target.kind === 'channel') {
+    return collectChannelCandidates(target.id, pool, db, fetchFn, adaptersFn, linksFn)
+  }
+  return collectGameCandidates(target.game, pool, db, fetchFn, adaptersFn)
+}
+
+/**
+ * The game pipeline:
  *
  * 1. Get adapters → filter broken/blocked sources
  * 2. Call getCandidateStreams concurrently on all eligible adapters
@@ -37,7 +61,7 @@ interface PipelineCandidate {
  *
  * Returns [] (not throw) if all adapters fail.
  */
-export async function collectAndRankCandidates(
+async function collectGameCandidates(
   game: Game,
   pool?: PlaywrightPool,
   db?: Database.Database,
@@ -193,5 +217,128 @@ export async function collectAndRankCandidates(
 
   ranked.sort((a, b) => b.score - a.score)
   console.log(`[candidates] final ranked count: ${ranked.length}`)
+  return ranked
+}
+
+// ---------------------------------------------------------------------------
+// collectChannelCandidates
+// ---------------------------------------------------------------------------
+
+/**
+ * The channel pipeline. Simpler than the game one: no matcher (a source's own
+ * link already names the exact channel, so matcherConfidence is always 1.0)
+ * and no early-exit race, since channel counts are small.
+ *
+ * Eligible adapters are those that implement getChannelStreams, are in a
+ * healthy DB state, and have a getChannelLinks(channelId) entry — i.e. this
+ * source's listing crawl actually found this channel.
+ *
+ * Returns [] (not throw) if all adapters fail.
+ */
+async function collectChannelCandidates(
+  channelId: string,
+  pool?: PlaywrightPool,
+  db?: Database.Database,
+  fetchFn?: typeof fetch,
+  adaptersFn?: () => SourceAdapter[],
+  linksFn?: GetChannelLinksFn
+): Promise<StreamCandidate[]> {
+  const adapters = (adaptersFn ?? getAllAdapters)()
+  const getLinks = linksFn ?? getChannelLinks
+  const links = getLinks(channelId, db)
+  const linkBySourceId = new Map(links.map((link) => [link.sourceId, link]))
+
+  console.log(`[candidates] channel=${channelId} adapters=${adapters.length} links=${links.length}`)
+
+  const eligible: { adapter: SourceAdapter; source: ReturnType<typeof getSourceById> & {}; link: ChannelSourceLink }[] = []
+  for (const adapter of adapters) {
+    if (!adapter.getChannelStreams) continue
+    const link = linkBySourceId.get(adapter.sourceId)
+    if (!link) continue
+    const source = getSourceById(adapter.sourceId, db)
+    if (!source) continue
+    if (source.healthState === 'broken' || source.healthState === 'blocked') continue
+    eligible.push({ adapter, source, link })
+  }
+  console.log(`[candidates] eligible channel adapters: ${eligible.map((e) => e.adapter.sourceId)}`)
+
+  const pipeline: PipelineCandidate[] = []
+  await Promise.allSettled(
+    eligible.map(async ({ adapter, source, link }) => {
+      try {
+        const raws = pool
+          ? await adapter.getChannelStreams!(link.url, pool)
+          : await adapter.getChannelStreams!(link.url, undefined as unknown as PlaywrightPool)
+        for (const raw of raws) {
+          pipeline.push({
+            sourceId: adapter.sourceId,
+            sourceDomain: source.baseUrl,
+            healthState: source.healthState,
+            raw,
+            matcherConfidence: 1.0,
+            finalConfidence: raw.extractionConfidence * 1.0,
+          })
+        }
+      } catch (err) {
+        console.error(`[candidates] ${adapter.sourceId} rejected (channel):`, err)
+      }
+    })
+  )
+
+  const probeResults = await Promise.allSettled(
+    pipeline.map((pc) =>
+      probeCandidate(
+        {
+          gameId: channelId,
+          sourceId: pc.sourceId,
+          sourceDomain: pc.raw.refererUrl ?? pc.sourceDomain,
+          raw: pc.raw,
+        },
+        fetchFn,
+        db
+      )
+    )
+  )
+
+  const ranked: StreamCandidate[] = []
+  for (let i = 0; i < pipeline.length; i++) {
+    const probeResult = probeResults[i]
+    if (probeResult.status === 'rejected') continue
+
+    const probe = probeResult.value
+    if (!probe) continue
+
+    const pc = pipeline[i]
+    const reliability = getReliability(pc.sourceId, 'channel', db)
+    const score = computeScore(
+      reliability,
+      probe.qualityScore,
+      probe.probeLatencyMs,
+      pc.finalConfidence,
+      pc.healthState
+    )
+
+    ranked.push({
+      candidateId: `${pc.sourceId}_${channelId}_${Date.now()}_${i}`,
+      gameId: channelId,
+      sourceId: pc.sourceId,
+      streamUrl: probe.streamUrl,
+      streamType: probe.streamType,
+      quality: probe.quality,
+      score,
+      probedAt: Date.now(),
+      probeSuccess: true,
+      probeLatencyMs: probe.probeLatencyMs,
+      refererUrl: pc.raw.refererUrl ?? null,
+      cdnOrigin: pc.raw.cdnOrigin ?? null,
+      cdnReferer: pc.raw.cdnReferer ?? null,
+      browserContext: pc.raw.browserContext,
+      manifestBody: pc.raw.manifestBody,
+      embedPlayerUrl: pc.raw.embedPlayerUrl,
+    })
+  }
+
+  ranked.sort((a, b) => b.score - a.score)
+  console.log(`[candidates] final ranked count (channel): ${ranked.length}`)
   return ranked
 }

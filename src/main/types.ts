@@ -27,6 +27,47 @@ export interface Game {
   headline?: string       // ESPN's round note, e.g. 'NLWC - Game 1'
 }
 
+export type ChannelCategory = 'sports' | 'news' | 'entertainment' | 'other'
+
+export interface Channel {
+  channelId: string
+  name: string
+  category: ChannelCategory
+  sourceCount: number   // computed from channel_sources, not stored
+  lastSeenAt: number
+}
+
+/** A source's link to a channel: the URL its listing page gave for it. */
+export interface ChannelSourceLink {
+  channelId: string
+  sourceId: string
+  url: string
+  label: string    // the source's own listing text, for display/debugging
+  seenAt: number
+}
+
+/** One entry from an adapter's listChannels() — not yet persisted. */
+export interface ChannelListing {
+  label: string
+  url: string
+}
+
+export interface GuideProgram {
+  channelId: string
+  title: string
+  subtitle?: string
+  start: number
+  end: number
+  kind: 'game' | 'show'
+  gameId?: string
+}
+
+export interface GuideData {
+  channels: Channel[]
+  programs: GuideProgram[]
+  generatedAt: number
+}
+
 export type SourceClassification = 'event_first' | 'channel_first' | 'mixed_aggregator'
 
 export type HealthState = 'healthy' | 'degraded' | 'blocked' | 'broken' | 'unknown'
@@ -106,9 +147,13 @@ export interface EventRow {
   occurredAt: number
 }
 
+/** Reliability rows are scoped per-league, except channels which share one
+ *  'channel' bucket across leagues (a channel has no league of its own). */
+export type ReliabilityScope = LeagueId | 'channel'
+
 export interface ReliabilityMetrics {
   sourceId: string
-  league: LeagueId
+  league: ReliabilityScope
   startupSuccesses: number
   startupFailures: number
   totalStartupTimeMs: number
@@ -118,6 +163,18 @@ export interface ReliabilityMetrics {
   consecutiveFailures: number
   lastUpdated: number
 }
+
+/**
+ * Whatever is currently playable: a game (existing pipeline) or a 24/7
+ * channel (new). Carries the resolved domain object so downstream code
+ * (candidates, playback) never has to look it up again.
+ */
+export type WatchTarget =
+  | { kind: 'game'; id: string; scope: LeagueId; game: Game }
+  | { kind: 'channel'; id: string; scope: 'channel'; channel: Channel }
+
+/** Channel ids are namespaced so isChannelId() can tell them apart from game ids. */
+export const CHANNEL_ID_PREFIX = 'ch:'
 
 // IPC result types
 export type PlayResult =

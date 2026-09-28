@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import type { Game, StreamCandidate } from '../types'
+import type { StreamCandidate, WatchTarget, ChannelSourceLink } from '../types'
 import type { PlaywrightPool } from '../adapters/pool'
 import type { SourceAdapter } from '../adapters/base'
 import { collectAndRankCandidates } from './candidates'
@@ -14,11 +14,12 @@ import { collectAndRankCandidates } from './candidates'
  * Returns [] (not throw) when all adapters fail or no candidates survive.
  */
 export async function getStreamCandidates(
-  game: Game,
+  target: WatchTarget,
   pool?: PlaywrightPool,
   db?: Database.Database,
   fetchFn?: typeof fetch,
-  adaptersFn?: () => SourceAdapter[]
+  adaptersFn?: () => SourceAdapter[],
+  linksFn?: (channelId: string, db?: Database.Database) => ChannelSourceLink[]
 ): Promise<StreamCandidate[]> {
-  return collectAndRankCandidates(game, pool, db, fetchFn, adaptersFn)
+  return collectAndRankCandidates(target, pool, db, fetchFn, adaptersFn, linksFn)
 }

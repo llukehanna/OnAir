@@ -1,5 +1,5 @@
 import { PlaybackManager } from '../../src/main/playback/manager'
-import type { Game, PlaybackEvent, StreamCandidate } from '../../src/main/types'
+import type { Game, PlaybackEvent, StreamCandidate, WatchTarget } from '../../src/main/types'
 import type { UrlCacheEntry } from '../../src/main/engine/cache'
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,11 @@ function makeGame(id = 'game-1'): Game {
     startTime: FIXED_START_TIME,
     status: 'LIVE',
   }
+}
+
+function makeGameTarget(id = 'game-1'): WatchTarget {
+  const game = makeGame(id)
+  return { kind: 'game', id: game.gameId, scope: game.league, game }
 }
 
 function makeCandidate(overrides: Partial<StreamCandidate> = {}): StreamCandidate {
@@ -77,7 +82,7 @@ function makeManager(
   const extract = opts.onExtract ?? (async () => candidates)
   const mgr = new PlaybackManager(
     opts.win,
-    () => makeGame(),
+    () => makeGameTarget(),
     () => [],
     () => 'expired',
     async () => null,

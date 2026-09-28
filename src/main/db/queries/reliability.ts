@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { getDb } from '../connection'
-import type { ReliabilityMetrics, LeagueId } from '../../types'
+import type { ReliabilityMetrics, ReliabilityScope } from '../../types'
 
 interface ReliabilityRow {
   id: number
@@ -19,7 +19,7 @@ interface ReliabilityRow {
 function rowToMetrics(row: ReliabilityRow): ReliabilityMetrics {
   return {
     sourceId: row.source_id,
-    league: row.league as LeagueId,
+    league: row.league as ReliabilityScope,
     startupSuccesses: row.startup_successes,
     startupFailures: row.startup_failures,
     totalStartupTimeMs: row.total_startup_time_ms,
@@ -31,7 +31,7 @@ function rowToMetrics(row: ReliabilityRow): ReliabilityMetrics {
   }
 }
 
-export function getReliability(sourceId: string, league: LeagueId, db?: Database.Database): ReliabilityMetrics | null {
+export function getReliability(sourceId: string, league: ReliabilityScope, db?: Database.Database): ReliabilityMetrics | null {
   const d = db ?? getDb()
   const row = d
     .prepare('SELECT * FROM source_reliability WHERE source_id = ? AND league = ?')
@@ -39,7 +39,7 @@ export function getReliability(sourceId: string, league: LeagueId, db?: Database
   return row ? rowToMetrics(row) : null
 }
 
-export function upsertReliability(sourceId: string, league: LeagueId, db?: Database.Database): ReliabilityMetrics {
+export function upsertReliability(sourceId: string, league: ReliabilityScope, db?: Database.Database): ReliabilityMetrics {
   const d = db ?? getDb()
   d.prepare(`
     INSERT OR IGNORE INTO source_reliability (
@@ -55,7 +55,7 @@ export function upsertReliability(sourceId: string, league: LeagueId, db?: Datab
 
 export function recordStartupSuccess(
   sourceId: string,
-  league: LeagueId,
+  league: ReliabilityScope,
   latencyMs: number,
   db?: Database.Database
 ): void {
@@ -72,7 +72,7 @@ export function recordStartupSuccess(
   `).run(sourceId, league, latencyMs, Date.now(), latencyMs, Date.now())
 }
 
-export function recordStartupFailure(sourceId: string, league: LeagueId, db?: Database.Database): void {
+export function recordStartupFailure(sourceId: string, league: ReliabilityScope, db?: Database.Database): void {
   const d = db ?? getDb()
   d.prepare(`
     INSERT INTO source_reliability (source_id, league, startup_failures, total_sessions, consecutive_failures, last_updated)
@@ -85,7 +85,7 @@ export function recordStartupFailure(sourceId: string, league: LeagueId, db?: Da
   `).run(sourceId, league, Date.now(), Date.now())
 }
 
-export function recordBufferEvent(sourceId: string, league: LeagueId, db?: Database.Database): void {
+export function recordBufferEvent(sourceId: string, league: ReliabilityScope, db?: Database.Database): void {
   const d = db ?? getDb()
   d.prepare(`
     INSERT INTO source_reliability (source_id, league, buffer_events, last_updated)
@@ -96,7 +96,7 @@ export function recordBufferEvent(sourceId: string, league: LeagueId, db?: Datab
   `).run(sourceId, league, Date.now(), Date.now())
 }
 
-export function recordSwitchEvent(sourceId: string, league: LeagueId, db?: Database.Database): void {
+export function recordSwitchEvent(sourceId: string, league: ReliabilityScope, db?: Database.Database): void {
   const d = db ?? getDb()
   d.prepare(`
     INSERT INTO source_reliability (source_id, league, switch_events, last_updated)
@@ -107,7 +107,7 @@ export function recordSwitchEvent(sourceId: string, league: LeagueId, db?: Datab
   `).run(sourceId, league, Date.now(), Date.now())
 }
 
-export function resetConsecutiveFailures(sourceId: string, league: LeagueId, db?: Database.Database): void {
+export function resetConsecutiveFailures(sourceId: string, league: ReliabilityScope, db?: Database.Database): void {
   const d = db ?? getDb()
   d.prepare(`
     UPDATE source_reliability SET consecutive_failures = 0, last_updated = ?

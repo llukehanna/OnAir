@@ -1,7 +1,11 @@
 import { collectAndRankCandidates } from '../../src/main/engine/candidates'
 import type { SourceAdapter, RawStreamCandidate } from '../../src/main/adapters/base'
-import type { Game } from '../../src/main/types'
+import type { Game, WatchTarget, ChannelSourceLink } from '../../src/main/types'
 import { createTestDbWithMigrations } from '../helpers/db'
+
+function gameTarget(game: Game): WatchTarget {
+  return { kind: 'game', id: game.gameId, scope: game.league, game }
+}
 
 // ---------------------------------------------------------------------------
 // Mock adapter factory
@@ -18,6 +22,7 @@ function createMockAdapter(overrides: Partial<SourceAdapter> & { sourceId: strin
     confidenceWeight: overrides.confidenceWeight ?? 0.8,
     getCandidateStreams: overrides.getCandidateStreams ?? jest.fn().mockResolvedValue([]),
     getSourceHealth: overrides.getSourceHealth ?? jest.fn().mockResolvedValue('unknown'),
+    getChannelStreams: overrides.getChannelStreams,
   }
 }
 
@@ -101,7 +106,7 @@ describe('collectAndRankCandidates — health filtering', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(getCandidateStreams).not.toHaveBeenCalled()
@@ -118,7 +123,7 @@ describe('collectAndRankCandidates — health filtering', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(getCandidateStreams).not.toHaveBeenCalled()
@@ -139,7 +144,7 @@ describe('collectAndRankCandidates — health filtering', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(1)
@@ -166,7 +171,7 @@ describe('collectAndRankCandidates — confidence composition', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     // event_first -> matcherConfidence=1.0, so finalConfidence=0.8*1.0=0.8
@@ -191,7 +196,7 @@ describe('collectAndRankCandidates — confidence composition', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(0)
@@ -226,7 +231,7 @@ describe('collectAndRankCandidates — confidence composition', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      CBB_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(CBB_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(0)
@@ -267,7 +272,7 @@ describe('collectAndRankCandidates — parallel probing', () => {
     }) as unknown as typeof fetch
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapterA, adapterB]
     )
 
     expect(results).toHaveLength(2)
@@ -294,7 +299,7 @@ describe('collectAndRankCandidates — parallel probing', () => {
     }) as unknown as typeof fetch
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(0)
@@ -342,7 +347,7 @@ describe('collectAndRankCandidates — ranking', () => {
     }) as unknown as typeof fetch
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterHigh, adapterLow]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapterHigh, adapterLow]
     )
 
     expect(results).toHaveLength(2)
@@ -376,7 +381,7 @@ describe('collectAndRankCandidates — ranking', () => {
     })
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterH, adapterU]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapterH, adapterU]
     )
 
     expect(results).toHaveLength(2)
@@ -407,7 +412,7 @@ describe('collectAndRankCandidates — error handling', () => {
     const mockFetch = makeMockFetch()
 
     await expect(
-      collectAndRankCandidates(NBA_GAME, undefined, db, mockFetch, () => [adapterA, adapterB])
+      collectAndRankCandidates(gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapterA, adapterB])
     ).resolves.toEqual([])
   })
 
@@ -430,7 +435,7 @@ describe('collectAndRankCandidates — error handling', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapterOk, adapterFail]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapterOk, adapterFail]
     )
 
     expect(results).toHaveLength(1)
@@ -451,7 +456,7 @@ describe('collectAndRankCandidates — error handling', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(1)
@@ -475,10 +480,121 @@ describe('collectAndRankCandidates — error handling', () => {
     const mockFetch = makeMockFetch()
 
     const results = await collectAndRankCandidates(
-      NBA_GAME, undefined, db, mockFetch, () => [adapter]
+      gameTarget(NBA_GAME), undefined, db, mockFetch, () => [adapter]
     )
 
     expect(results).toHaveLength(2)
     expect(new Set(results.map((r) => r.candidateId)).size).toBe(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: channel targets
+// ---------------------------------------------------------------------------
+
+describe('collectAndRankCandidates — channel targets', () => {
+  const CHANNEL_TARGET: WatchTarget = {
+    kind: 'channel',
+    id: 'ch:espn',
+    scope: 'channel',
+    channel: { channelId: 'ch:espn', name: 'ESPN', category: 'sports', sourceCount: 1, lastSeenAt: Date.now() },
+  }
+
+  function makeLink(overrides: Partial<ChannelSourceLink> = {}): ChannelSourceLink {
+    return {
+      channelId: 'ch:espn',
+      sourceId: 'src_ch',
+      url: 'https://src-ch.test/espn',
+      label: 'ESPN',
+      seenAt: Date.now(),
+      ...overrides,
+    }
+  }
+
+  it('calls only adapters that have a link and implement getChannelStreams', async () => {
+    const db = createTestDbWithMigrations()
+    seedSource(db, 'src_ch', 'healthy', 'channel_first')
+    seedSource(db, 'src_no_link', 'healthy', 'channel_first')
+    seedSource(db, 'src_no_method', 'healthy', 'channel_first')
+
+    const getChannelStreams = jest.fn().mockResolvedValue([makeRaw({ streamUrl: 'https://cdn.espn.test/stream.m3u8' })])
+    const adapterWithLink = createMockAdapter({ sourceId: 'src_ch', getChannelStreams })
+
+    // Implements getChannelStreams, but has no link for this channel.
+    const adapterNoLink = createMockAdapter({
+      sourceId: 'src_no_link',
+      getChannelStreams: jest.fn().mockResolvedValue([makeRaw()]),
+    })
+
+    // Has a link, but does not implement getChannelStreams at all.
+    const adapterNoMethod = createMockAdapter({ sourceId: 'src_no_method' })
+
+    const linksFn = jest.fn().mockReturnValue([makeLink({ sourceId: 'src_ch' })])
+    const mockFetch = makeMockFetch()
+
+    const results = await collectAndRankCandidates(
+      CHANNEL_TARGET,
+      undefined,
+      db,
+      mockFetch,
+      () => [adapterWithLink, adapterNoLink, adapterNoMethod],
+      linksFn
+    )
+
+    expect(getChannelStreams).toHaveBeenCalledWith('https://src-ch.test/espn', undefined)
+    expect(results).toHaveLength(1)
+    expect(results[0].sourceId).toBe('src_ch')
+  })
+
+  it("sets the candidate's gameId to the channel id", async () => {
+    const db = createTestDbWithMigrations()
+    seedSource(db, 'src_ch', 'healthy', 'channel_first')
+
+    const adapter = createMockAdapter({
+      sourceId: 'src_ch',
+      getChannelStreams: jest.fn().mockResolvedValue([makeRaw({ streamUrl: 'https://cdn.espn.test/stream.m3u8' })]),
+    })
+    const linksFn = jest.fn().mockReturnValue([makeLink()])
+    const mockFetch = makeMockFetch()
+
+    const results = await collectAndRankCandidates(
+      CHANNEL_TARGET, undefined, db, mockFetch, () => [adapter], linksFn
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].gameId).toBe('ch:espn')
+  })
+
+  it('does not call an adapter whose source is broken', async () => {
+    const db = createTestDbWithMigrations()
+    seedSource(db, 'src_ch', 'broken', 'channel_first')
+
+    const getChannelStreams = jest.fn().mockResolvedValue([makeRaw()])
+    const adapter = createMockAdapter({ sourceId: 'src_ch', getChannelStreams })
+    const linksFn = jest.fn().mockReturnValue([makeLink()])
+    const mockFetch = makeMockFetch()
+
+    const results = await collectAndRankCandidates(
+      CHANNEL_TARGET, undefined, db, mockFetch, () => [adapter], linksFn
+    )
+
+    expect(getChannelStreams).not.toHaveBeenCalled()
+    expect(results).toHaveLength(0)
+  })
+
+  it('returns [] (not throw) when the only eligible adapter rejects', async () => {
+    const db = createTestDbWithMigrations()
+    seedSource(db, 'src_ch', 'healthy', 'channel_first')
+
+    const adapter = createMockAdapter({
+      sourceId: 'src_ch',
+      getChannelStreams: jest.fn().mockRejectedValue(new Error('boom')),
+    })
+    const linksFn = jest.fn().mockReturnValue([makeLink()])
+    const mockFetch = makeMockFetch()
+
+    await expect(
+      collectAndRankCandidates(CHANNEL_TARGET, undefined, db, mockFetch, () => [adapter], linksFn)
+    ).resolves.toEqual([])
   })
 })

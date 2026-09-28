@@ -104,6 +104,69 @@ const migrations: Migration[] = [
       db.exec('ALTER TABLE games ADD COLUMN detail_json TEXT')
     }
   },
+  {
+    version: 3,
+    name: 'channels_and_candidate_targets',
+    // Adds channel storage and lets stream_candidates carry a channel id.
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE channels (
+          channel_id    TEXT PRIMARY KEY,
+          name          TEXT NOT NULL,
+          category      TEXT NOT NULL,
+          last_seen_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE channel_sources (
+          channel_id  TEXT NOT NULL,
+          source_id   TEXT NOT NULL,
+          url         TEXT NOT NULL,
+          label       TEXT NOT NULL,
+          seen_at     INTEGER NOT NULL,
+
+          PRIMARY KEY(channel_id, source_id),
+          FOREIGN KEY(channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE,
+          FOREIGN KEY(source_id) REFERENCES sources(source_id)
+        );
+      `)
+
+      // stream_candidates.game_id previously had FOREIGN KEY -> games(game_id),
+      // but a channel id ('ch:espn') is never a row in games. SQLite can't drop
+      // a constraint in place, so rebuild: create the new shape, copy every
+      // row across, drop the old table, rename the new one into place.
+      db.exec(`
+        CREATE TABLE stream_candidates_new (
+          id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+          game_id               TEXT NOT NULL,
+          source_id             TEXT NOT NULL,
+          stream_url            TEXT NOT NULL,
+          stream_type           TEXT NOT NULL,
+          quality               TEXT,
+          score                 REAL NOT NULL,
+          probe_success         INTEGER NOT NULL,
+          probe_latency_ms      INTEGER,
+          probed_at             INTEGER NOT NULL,
+
+          FOREIGN KEY(source_id) REFERENCES sources(source_id)
+        );
+
+        INSERT INTO stream_candidates_new (
+          id, game_id, source_id, stream_url, stream_type, quality, score,
+          probe_success, probe_latency_ms, probed_at
+        )
+        SELECT
+          id, game_id, source_id, stream_url, stream_type, quality, score,
+          probe_success, probe_latency_ms, probed_at
+        FROM stream_candidates;
+
+        DROP TABLE stream_candidates;
+        ALTER TABLE stream_candidates_new RENAME TO stream_candidates;
+
+        CREATE INDEX idx_candidates_game ON stream_candidates(game_id, score DESC);
+        CREATE INDEX idx_candidates_probed_at ON stream_candidates(probed_at);
+      `)
+    }
+  },
 ]
 
 export function runMigrations(dbOverride?: Database.Database): void {

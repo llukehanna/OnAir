@@ -1,8 +1,8 @@
 import type { BrowserWindow } from 'electron'
-import type { PlayResult, PlaybackEvent, Game, EventType, StreamCandidate, StreamType } from '../types'
+import type { PlayResult, PlaybackEvent, EventType, StreamCandidate, StreamType, WatchTarget } from '../types'
 import { getCacheEntries, classifyEntry, validateStaleEntries, setCacheEntries, type UrlCacheEntry } from '../engine/cache'
 import { getStreamCandidates } from '../engine/index'
-import { getGameById } from '../db/queries/games'
+import { resolveTarget } from '../engine/targets'
 import { destroyWebView, createWebView } from './webview'
 import { appendEvent } from '../db/queries/events'
 import { getSourceById } from '../db/queries/sources'
@@ -97,11 +97,11 @@ function entryToCandidate(entry: UrlCacheEntry, gameId: string): StreamCandidate
 // Injectable function types
 // ---------------------------------------------------------------------------
 
-type GetGameFn = (gameId: string) => Game | null
+type GetTargetFn = (id: string) => WatchTarget | null
 type GetCacheEntriesFn = (gameId: string) => UrlCacheEntry[]
 type ClassifyEntryFn = (entry: UrlCacheEntry) => 'fresh' | 'stale' | 'expired'
 type ValidateStaleFn = (entries: UrlCacheEntry[]) => Promise<UrlCacheEntry | null>
-type GetStreamCandidatesFn = (game: Game) => Promise<StreamCandidate[]>
+type GetStreamCandidatesFn = (target: WatchTarget) => Promise<StreamCandidate[]>
 type SetCacheEntriesFn = (gameId: string, candidates: StreamCandidate[]) => void
 type AppendEventFn = (
   eventType: EventType,
@@ -129,7 +129,7 @@ export class PlaybackManager {
   private session: FailoverSession | null = null
   /** The source currently on screen, so failover knows what to mark as failed. */
   private currentSource: PlayableSource | null = null
-  private currentGame: Game | null = null
+  private currentTarget: WatchTarget | null = null
 
   /** Background off-air watch on the playing stream. */
   private livenessTimer: ReturnType<typeof setInterval> | null = null
@@ -145,7 +145,7 @@ export class PlaybackManager {
   }
 
   // Injected dependencies (defaults to real implementations)
-  private getGameFn: GetGameFn
+  private getTargetFn: GetTargetFn
   private getCacheEntriesFn: GetCacheEntriesFn
   private classifyEntryFn: ClassifyEntryFn
   private validateStaleFn: ValidateStaleFn
@@ -155,7 +155,7 @@ export class PlaybackManager {
 
   constructor(
     win?: BrowserWindow,
-    getGameFn?: GetGameFn,
+    getTargetFn?: GetTargetFn,
     getCacheEntriesFn?: GetCacheEntriesFn,
     classifyEntryFn?: ClassifyEntryFn,
     validateStaleFn?: ValidateStaleFn,
@@ -164,7 +164,7 @@ export class PlaybackManager {
     appendEventFn?: AppendEventFn
   ) {
     this.win = win
-    this.getGameFn = getGameFn ?? ((id) => getGameById(id))
+    this.getTargetFn = getTargetFn ?? ((id) => resolveTarget(id))
     this.getCacheEntriesFn = getCacheEntriesFn ?? getCacheEntries
     this.classifyEntryFn = classifyEntryFn ?? classifyEntry
     this.validateStaleFn = validateStaleFn ?? validateStaleEntries
@@ -174,30 +174,30 @@ export class PlaybackManager {
   }
 
   /**
-   * Starts playback for the given game.
+   * Starts playback for the given game or channel id.
    *
    * Resolution order:
    *  1. Fresh cache entries — serve immediately
    *  2. Stale entries — HEAD validate top 3, use if any pass
    *  3. Cold — full Playwright extraction via getStreamCandidates
    *
-   * Always destroys current stream first (new game always wins).
+   * Always destroys current stream first (new target always wins).
    */
-  async play(gameId: string): Promise<PlayResult> {
-    const game = this.getGameFn(gameId)
-    if (!game) return { ok: false as const, reason: 'game_not_found' as const }
+  async play(id: string): Promise<PlayResult> {
+    const target = this.getTargetFn(id)
+    if (!target) return { ok: false as const, reason: 'game_not_found' as const }
 
-    // New game always wins — destroy whatever was playing
+    // New target always wins — destroy whatever was playing
     this.destroyCurrent()
     setActiveStreamHeaders(null, null)
 
     this.state = 'LOADING'
-    console.log(`[PlaybackManager] play(${gameId}) state=LOADING`)
+    console.log(`[PlaybackManager] play(${id}) state=LOADING`)
 
     try {
-      const entries = this.getCacheEntriesFn(gameId)
+      const entries = this.getCacheEntriesFn(target.id)
       const now = Date.now()
-      console.log(`[PlaybackManager] cache entries=${entries.length} for ${gameId}`)
+      console.log(`[PlaybackManager] cache entries=${entries.length} for ${target.id}`)
 
       // 1. Fresh entries — serve immediately, no HEAD check
       //    Skip session-bound CDN entries — their tokens can't be replayed from
@@ -209,11 +209,11 @@ export class PlaybackManager {
       if (fresh.length > 0) {
         void now
         this.session = createFailoverSession(
-          gameId,
-          fresh.map((e) => entryToCandidate(e, gameId))
+          target.id,
+          fresh.map((e) => entryToCandidate(e, target.id))
         )
         const top = fresh[0] // already sorted by score descending
-        return await this.startPlayback(game, entryToPlayable(top))
+        return await this.startPlayback(target, entryToPlayable(top))
       }
 
       // 2. Stale entries — HEAD validate top 3, serve if any pass
@@ -226,17 +226,17 @@ export class PlaybackManager {
         const validEntry = await this.validateStaleFn(stale)
         if (validEntry) {
           this.session = createFailoverSession(
-            gameId,
-            stale.map((e) => entryToCandidate(e, gameId))
+            target.id,
+            stale.map((e) => entryToCandidate(e, target.id))
           )
-          return await this.startPlayback(game, entryToPlayable(validEntry))
+          return await this.startPlayback(target, entryToPlayable(validEntry))
         }
       }
 
       // 3. Expired or no valid entries — full extraction via Playwright
       //    Hard 30s timeout prevents pool starvation from blocking the user forever.
       const candidates = await Promise.race([
-        this.getStreamCandidatesFn(game),
+        this.getStreamCandidatesFn(target),
         new Promise<StreamCandidate[]>((resolve) => setTimeout(() => {
           console.warn('[PlaybackManager] extraction timed out after 30s')
           resolve([])
@@ -247,10 +247,10 @@ export class PlaybackManager {
         return { ok: false as const, reason: 'no_candidates' as const }
       }
 
-      this.setCacheEntriesFn(gameId, candidates)
-      this.session = createFailoverSession(gameId, candidates)
+      this.setCacheEntriesFn(target.id, candidates)
+      this.session = createFailoverSession(target.id, candidates)
 
-      return await this.startPlayback(game, candidateToPlayable(candidates[0]))
+      return await this.startPlayback(target, candidateToPlayable(candidates[0]))
     } catch (err) {
       console.error('[PlaybackManager] play() threw:', err)
       this.state = 'IDLE'
@@ -263,7 +263,7 @@ export class PlaybackManager {
    * both route through here so the proxy decision, header injection, state
    * transition, and reliability write cannot drift apart.
    */
-  private async startPlayback(game: Game, source: PlayableSource): Promise<PlayResult> {
+  private async startPlayback(target: WatchTarget, source: PlayableSource): Promise<PlayResult> {
     // Session-bound CDNs reject requests from the Electron renderer (403)
     // because tokens are tied to the browser session that captured them.
     const isSessionBound = SESSION_BOUND_CDNS.some((cdn) => source.streamUrl.includes(cdn))
@@ -290,13 +290,13 @@ export class PlaybackManager {
     }
 
     this.currentSource = source
-    this.currentGame = game
+    this.currentTarget = target
     this.state = 'PLAYING'
-    this.startLivenessMonitor(game, source)
+    this.startLivenessMonitor(target, source)
 
     this.pushEvent({
       type: 'stream_started',
-      gameId: game.gameId,
+      gameId: target.id,
       sourceId: source.sourceId,
       occurredAt: Date.now(),
     })
@@ -304,7 +304,7 @@ export class PlaybackManager {
     // Closes the reliability loop: scoring can only learn which sources hold up
     // if playback reports back. Without this the tables stay at their defaults.
     try {
-      recordStartupSuccess(source.sourceId, game.league, 0)
+      recordStartupSuccess(source.sourceId, target.scope, 0)
     } catch {
       // Reliability accounting must never take playback down with it.
     }
@@ -333,9 +333,9 @@ export class PlaybackManager {
    */
   async failover(gameId: string, reason: string): Promise<PlayResult> {
     const session = this.session
-    const game = this.currentGame ?? this.getGameFn(gameId)
+    const target = this.currentTarget ?? this.getTargetFn(gameId)
 
-    if (!session || session.gameId !== gameId || !game) {
+    if (!session || session.gameId !== gameId || !target) {
       return { ok: false as const, reason: 'game_not_found' as const }
     }
 
@@ -350,7 +350,7 @@ export class PlaybackManager {
       const failed = this.currentSource
       if (failed) {
         session.markAttempted(failed.candidateId)
-        this.recordFailureFor(failed.sourceId, game)
+        this.recordFailureFor(failed.sourceId, target)
         this.appendEventFn('source_switch', {
           gameId,
           sourceId: failed.sourceId,
@@ -369,7 +369,7 @@ export class PlaybackManager {
           details: { reason, sourceName: this.sourceNameFn(next.sourceId) },
           occurredAt: Date.now(),
         })
-        return await this.startPlayback(game, candidateToPlayable(next))
+        return await this.startPlayback(target, candidateToPlayable(next))
       }
 
       // Rung 2 — one fresh extraction. Every cached URL may be an expired token
@@ -377,7 +377,7 @@ export class PlaybackManager {
       if (session.canReextract) {
         session.escalate()
         console.log(`[PlaybackManager] candidates exhausted, re-extracting for ${gameId}`)
-        const fresh = await this.getStreamCandidatesFn(game).catch(() => [])
+        const fresh = await this.getStreamCandidatesFn(target).catch(() => [])
         session.replaceCandidates(fresh)
         if (fresh.length > 0) {
           this.setCacheEntriesFn(gameId, fresh)
@@ -390,7 +390,7 @@ export class PlaybackManager {
               details: { reason: 'reextracted', sourceName: this.sourceNameFn(retry.sourceId) },
               occurredAt: Date.now(),
             })
-            return await this.startPlayback(game, candidateToPlayable(retry))
+            return await this.startPlayback(target, candidateToPlayable(retry))
           }
         }
       }
@@ -458,8 +458,8 @@ export class PlaybackManager {
    */
   async selectStream(candidateId: string): Promise<PlayResult> {
     const session = this.session
-    const game = this.currentGame
-    if (!session || !game) return { ok: false as const, reason: 'game_not_found' as const }
+    const target = this.currentTarget
+    if (!session || !target) return { ok: false as const, reason: 'game_not_found' as const }
 
     session.pin(candidateId)
     const picked = session.nextCandidate()
@@ -469,12 +469,12 @@ export class PlaybackManager {
 
     this.pushEvent({
       type: 'source_switch',
-      gameId: game.gameId,
+      gameId: target.id,
       sourceId: picked.sourceId,
       details: { reason: 'user_selected', sourceName: this.sourceNameFn(picked.sourceId) },
       occurredAt: Date.now(),
     })
-    return await this.startPlayback(game, candidateToPlayable(picked))
+    return await this.startPlayback(target, candidateToPlayable(picked))
   }
 
   /**
@@ -490,7 +490,7 @@ export class PlaybackManager {
    * An off-air source is caught within one interval instead of never, and
    * recovery latency is unchanged.
    */
-  private startLivenessMonitor(game: Game, source: PlayableSource): void {
+  private startLivenessMonitor(target: WatchTarget, source: PlayableSource): void {
     this.stopLivenessMonitor()
 
     // Embedded playback has no manifest to poll.
@@ -523,7 +523,7 @@ export class PlaybackManager {
           ? '(segment list unchanged)'
           : `(sequence stuck at ${result.firstSequence})`
       )
-      void this.failover(game.gameId, 'off_air')
+      void this.failover(target.id, 'off_air')
     }, LIVENESS_INTERVAL_MS)
 
     this.livenessTimer.unref?.()
@@ -536,10 +536,10 @@ export class PlaybackManager {
     }
   }
 
-  private recordFailureFor(sourceId: string, game: Game): void {
+  private recordFailureFor(sourceId: string, target: WatchTarget): void {
     try {
-      recordStartupFailure(sourceId, game.league)
-      recordSwitchEvent(sourceId, game.league)
+      recordStartupFailure(sourceId, target.scope)
+      recordSwitchEvent(sourceId, target.scope)
     } catch {
       // Reliability accounting must never take playback down with it.
     }
@@ -555,7 +555,7 @@ export class PlaybackManager {
     setActiveStreamHeaders(null, null)
     this.session = null
     this.currentSource = null
-    this.currentGame = null
+    this.currentTarget = null
     this.state = 'IDLE'
   }
 

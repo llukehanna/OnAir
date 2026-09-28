@@ -14,6 +14,8 @@ describe('runMigrations', () => {
     expect(tables).toContain('source_reliability')
     expect(tables).toContain('stream_candidates')
     expect(tables).toContain('events')
+    expect(tables).toContain('channels')
+    expect(tables).toContain('channel_sources')
 
     db.close()
   })
@@ -36,7 +38,7 @@ describe('runMigrations', () => {
       db.prepare('SELECT version FROM schema_version ORDER BY version').all() as { version: number }[]
     ).map((row) => row.version)
 
-    expect(versions).toEqual([1, 2])
+    expect(versions).toEqual([1, 2, 3])
 
     db.close()
   })
@@ -108,5 +110,118 @@ describe('runMigrations', () => {
     }).toThrow()
 
     db.close()
+  })
+
+  describe('v3 channels_and_candidate_targets', () => {
+    it('accepts a stream_candidates row whose game_id is a channel id, with foreign keys on', () => {
+      const db = createTestDbWithMigrations()
+
+      // The source FK on stream_candidates remains — only the games FK is gone.
+      db.prepare(`
+        INSERT INTO sources (source_id, name, base_url, classification, supported_leagues,
+          extraction_method, confidence_weight, health_state, enabled, needs_adapter, added_at)
+        VALUES ('src_ch', 'Src', 'https://src.test', 'event_first', '["nba"]',
+          'network_intercept', 0.8, 'healthy', 1, 0, ?)
+      `).run(Date.now())
+
+      expect(() => {
+        db.prepare(`
+          INSERT INTO stream_candidates (game_id, source_id, stream_url, stream_type, score, probe_success, probed_at)
+          VALUES ('ch:x', 'src_ch', 'https://cdn.test/stream.m3u8', 'hls', 0.9, 1, ?)
+        `).run(Date.now())
+      }).not.toThrow()
+
+      const row = db.prepare("SELECT game_id FROM stream_candidates WHERE game_id = 'ch:x'").get()
+      expect(row).toBeDefined()
+
+      db.close()
+    })
+
+    it('still rejects a stream_candidates row whose source_id does not exist', () => {
+      const db = createTestDbWithMigrations()
+
+      expect(() => {
+        db.prepare(`
+          INSERT INTO stream_candidates (game_id, source_id, stream_url, stream_type, score, probe_success, probed_at)
+          VALUES ('ch:x', 'nonexistent_source', 'https://cdn.test/stream.m3u8', 'hls', 0.9, 1, ?)
+        `).run(Date.now())
+      }).toThrow()
+
+      db.close()
+    })
+
+    it('upgrading a v2 database preserves existing stream_candidates rows', () => {
+      const db = createTestDb()
+      runMigrations(db)
+
+      // Revert to the pre-v3 shape: stream_candidates with a games FK, no
+      // channel tables — then seed a row the way a v1+v2 install would have.
+      db.exec('DROP TABLE channels')
+      db.exec('DROP TABLE channel_sources')
+      db.exec(`
+        CREATE TABLE stream_candidates_old (
+          id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+          game_id               TEXT NOT NULL,
+          source_id             TEXT NOT NULL,
+          stream_url            TEXT NOT NULL,
+          stream_type           TEXT NOT NULL,
+          quality               TEXT,
+          score                 REAL NOT NULL,
+          probe_success         INTEGER NOT NULL,
+          probe_latency_ms      INTEGER,
+          probed_at             INTEGER NOT NULL,
+          FOREIGN KEY(game_id) REFERENCES games(game_id),
+          FOREIGN KEY(source_id) REFERENCES sources(source_id)
+        );
+        DROP TABLE stream_candidates;
+        ALTER TABLE stream_candidates_old RENAME TO stream_candidates;
+        CREATE INDEX idx_candidates_game ON stream_candidates(game_id, score DESC);
+        CREATE INDEX idx_candidates_probed_at ON stream_candidates(probed_at);
+      `)
+      db.prepare('DELETE FROM schema_version WHERE version = 3').run()
+
+      db.prepare(`
+        INSERT INTO games (game_id, league, team_home, team_away, start_time, status, cached_at)
+        VALUES ('nba_1', 'nba', 'Home', 'Away', 1, 'LIVE', 1)
+      `).run()
+      db.prepare(`
+        INSERT INTO sources (source_id, name, base_url, classification, supported_leagues,
+          extraction_method, confidence_weight, health_state, enabled, needs_adapter, added_at)
+        VALUES ('src_old', 'Src', 'https://src.test', 'event_first', '["nba"]',
+          'network_intercept', 0.8, 'healthy', 1, 0, ?)
+      `).run(Date.now())
+      db.prepare(`
+        INSERT INTO stream_candidates (game_id, source_id, stream_url, stream_type, score, probe_success, probed_at)
+        VALUES ('nba_1', 'src_old', 'https://cdn.test/old.m3u8', 'hls', 0.7, 1, ?)
+      `).run(Date.now())
+
+      runMigrations(db)
+
+      const row = db.prepare(
+        "SELECT game_id, source_id, stream_url FROM stream_candidates WHERE game_id = 'nba_1'"
+      ).get() as { game_id: string; source_id: string; stream_url: string }
+      expect(row).toEqual({ game_id: 'nba_1', source_id: 'src_old', stream_url: 'https://cdn.test/old.m3u8' })
+
+      const tables = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as { name: string }[]
+      ).map((r) => r.name)
+      expect(tables).toContain('channels')
+      expect(tables).toContain('channel_sources')
+
+      db.close()
+    })
+
+    it('recreates the stream_candidates indexes', () => {
+      const db = createTestDbWithMigrations()
+
+      const indexes = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").all() as { name: string }[]
+      ).map((row) => row.name)
+
+      expect(indexes).toContain('idx_candidates_game')
+      expect(indexes).toContain('idx_candidates_probed_at')
+
+      db.close()
+    })
   })
 })
