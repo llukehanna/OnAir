@@ -1,10 +1,11 @@
 import type { Page } from 'playwright'
-import type { Game, HealthState, LeagueId, SourceClassification } from '../../types'
+import type { ChannelListing, Game, HealthState, LeagueId, SourceClassification } from '../../types'
 import type { RawStreamCandidate, SourceAdapter } from '../base'
 import type { PlaywrightPool } from '../pool'
 import { getAdRules } from '../../playback/adblock'
 import { interceptStreams, isBlocked, noOpAdRules } from '../intercept'
 import { matchGame } from '../../engine/matcher'
+import { pickChannelLinks } from '../../channels/canonical'
 
 // ---------------------------------------------------------------------------
 // InterceptAdapter — shared base for player-page sources
@@ -35,6 +36,11 @@ export const DEFAULT_GAME_LINK_PATTERNS: readonly RegExp[] = [
   /\/(match|watch|live|stream|event|game|play|video)/i,
 ]
 
+/** Default channels.linkPatterns when a source doesn't set its own. */
+export const DEFAULT_CHANNEL_LINK_PATTERNS: readonly RegExp[] = [
+  /\/(channel|live|tv|watch|stream)/i,
+]
+
 export interface InterceptAdapterConfig {
   readonly sourceId: string
   readonly name: string
@@ -56,6 +62,16 @@ export interface InterceptAdapterConfig {
   readonly interceptTimeoutMs?: number
   /** Minimum link-label match confidence to follow a listing link (default 0.5). */
   readonly matchThreshold?: number
+  /**
+   * This source's 24/7 channel listing. Omit when the source has no usable
+   * one (no flat page of channel links to scan) — listChannels() then always
+   * returns [], same as an adapter that never implemented it.
+   */
+  readonly channels?: {
+    readonly listUrl: string
+    /** Pathname patterns marking a channel link. Defaults to DEFAULT_CHANNEL_LINK_PATTERNS. */
+    readonly linkPatterns?: readonly RegExp[]
+  }
 }
 
 /** A listing link that was matched to the requested game. */
@@ -193,6 +209,77 @@ export class InterceptAdapter implements SourceAdapter {
   }
 
   /**
+   * Lists this source's 24/7 channels, if it has a usable listing page
+   * (config.channels set). Sources without one — no flat page of channel
+   * links to scan — simply return [], the same result as an adapter that
+   * never implemented listChannels at all.
+   */
+  async listChannels(pool: PlaywrightPool): Promise<ChannelListing[]> {
+    const channels = this.config.channels
+    if (!channels) return []
+
+    const page = await pool.acquire('background')
+    try {
+      await page
+        .goto(channels.listUrl, { waitUntil: 'domcontentloaded', timeout: LISTING_TIMEOUT_MS })
+        .catch(() => {})
+
+      if (await isBlocked(page).catch(() => false)) return []
+
+      const anchors = await this.collectChannelAnchors(page)
+      const patterns = channels.linkPatterns ?? DEFAULT_CHANNEL_LINK_PATTERNS
+      return pickChannelLinks(anchors, patterns)
+    } catch (err) {
+      console.warn(`[${this.config.sourceId}] listChannels failed:`, err)
+      return []
+    } finally {
+      pool.release(page)
+    }
+  }
+
+  /**
+   * Extracts streams for one channel's listing url — the channel equivalent
+   * of getCandidateStreams, minus the listing-page/link-matching steps
+   * (the url given here already IS the target page). matchText is always
+   * null: there's no game to score a listing label against.
+   */
+  async getChannelStreams(url: string, pool: PlaywrightPool): Promise<RawStreamCandidate[]> {
+    const page = await pool.acquire('user')
+    try {
+      const captured = await interceptStreams(
+        page,
+        url,
+        getAdRules() ?? noOpAdRules,
+        this.config.interceptTimeoutMs ?? 12_000,
+        this.config.embedPlayerPatterns ?? []
+      )
+      if (!captured) return []
+
+      return [
+        {
+          streamUrl: captured.streamUrl,
+          streamType: 'hls',
+          quality: captured.preProbed.quality,
+          extractionConfidence: this.config.confidenceWeight,
+          refererUrl: url,
+          cdnOrigin: captured.cdnOrigin,
+          cdnReferer: captured.cdnReferer,
+          preProbed: captured.preProbed,
+          manifestBody: captured.manifestBody,
+          browserContext: captured.browserContext,
+          embedPlayerUrl: captured.embedPlayerUrl,
+          matchText: null,
+        },
+      ]
+    } catch (err) {
+      console.warn(`[${this.config.sourceId}] getChannelStreams failed:`, err)
+      return []
+    } finally {
+      pool.release(page)
+    }
+  }
+
+  /**
    * Searches the listing page's anchors for the one naming this game.
    *
    * A candidate link must (a) have a pathname matching one of the source's
@@ -234,6 +321,48 @@ export class InterceptAdapter implements SourceAdapter {
       }
     }
     return best
+  }
+
+  /**
+   * Collects {url, text} anchors for channel discovery, same shape as
+   * findGameLink's extraction but with a cleaner label: a channel card's
+   * name usually isn't the anchor's own textContent (that also picks up a
+   * country badge, a LIVE pill, a "1 source" footer, ...) but aria-label, or
+   * an h3 nested in or near the anchor. canonicalChannel needs the clean
+   * name — matchGame's fuzzy scoring tolerates findGameLink's noisier text,
+   * but token-exact canonicalization does not.
+   */
+  protected async collectChannelAnchors(page: Page): Promise<AnchorInfo[]> {
+    return page
+      .evaluate(() => {
+        const out: { url: string; text: string }[] = []
+        for (const node of Array.from(document.querySelectorAll('a[href]'))) {
+          const el = node as HTMLAnchorElement
+          let text: string
+
+          const aria = el.getAttribute('aria-label')
+          if (aria && aria.trim().length > 0) {
+            text = aria.trim().replace(/^watch\s+/i, '')
+          } else {
+            let h3 = el.querySelector('h3')
+            // The name element is sometimes a sibling subtree (a "watch"
+            // button anchor next to a "channel-info" div), not a descendant
+            // of the anchor itself — climb a few ancestors to find it.
+            let ancestor: HTMLElement | null = el.parentElement
+            for (let i = 0; i < 4 && ancestor && !h3; i++) {
+              h3 = ancestor.querySelector('h3')
+              ancestor = ancestor.parentElement
+            }
+            text = h3 ? (h3.textContent ?? '').trim() : (el.textContent ?? '').trim()
+          }
+
+          text = text.replace(/\s+/g, ' ')
+          if (text.length === 0) continue
+          if (el.href.startsWith('http')) out.push({ url: el.href, text })
+        }
+        return out
+      })
+      .catch(() => [] as AnchorInfo[])
   }
 }
 

@@ -8,6 +8,13 @@ import { InterceptAdapter } from './intercept-base'
 // its confidenceWeight is deliberately low and candidates only surface
 // when a listing label actually names both teams. The source's main value
 // is coverage breadth, not game precision.
+//
+// No `channels` config: despite the name, famelack.com/tv has no flat page
+// of channel links to scan. It's a country picker (a <span> grid, not
+// anchors — the actual channel list only renders after a country is
+// clicked), which would mean multi-step interaction rather than a single
+// read-only page load. Confirmed with a rendered-Chrome fetch of / and /tv
+// (see task-2-report.md); left unset rather than guessed at.
 // ---------------------------------------------------------------------------
 
 export class FamelackAdapter extends InterceptAdapter {

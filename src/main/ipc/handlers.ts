@@ -8,11 +8,29 @@ import { isFixtureModeEnabled, setFixtureMode, getFixtureMode } from '../dev/fix
 import type { FailureMode } from '../dev/hls-fixture'
 import { getRecentEvents } from '../db/queries/events'
 import { getCacheEntries } from '../engine/cache'
+import { getChannels } from '../db/queries/channels'
+import { discoverOnce } from '../channels/scheduler'
+import { getAllAdapters } from '../adapters/registry'
+import type { PlaywrightPool } from '../adapters/pool'
 
-export function registerHandlers(playbackManager: PlaybackManager): void {
+export function registerHandlers(playbackManager: PlaybackManager, pool?: PlaywrightPool): void {
   // Game discovery
   ipcMain.handle('get-games', async (_event, league?: string) => {
     return getGames(league as LeagueId | undefined)
+  })
+
+  // Channel discovery
+  ipcMain.handle('get-channels', async (_event) => {
+    return getChannels()
+  })
+
+  // Runs a discovery pass on demand (rather than waiting for the next
+  // scheduled one) and returns the refreshed list. Without a pool — there
+  // shouldn't be one in practice, since index.ts always constructs it before
+  // registering handlers — falls back to whatever's already stored.
+  ipcMain.handle('refresh-channels', async (_event) => {
+    if (!pool) return getChannels()
+    return discoverOnce(pool, getAllAdapters)
   })
 
   // Playback control
