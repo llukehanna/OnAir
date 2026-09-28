@@ -206,7 +206,7 @@ function Lane({ channel, programs, win, now, gamesById, liveGameIds, onTune }: L
       ) : (
         placed.map(({ program, at }) => (
           <Block
-            key={`${program.start}-${program.title}`}
+            key={`${channel.channelId}-${program.start}-${program.title}`}
             program={program}
             left={at.left}
             width={at.width}
