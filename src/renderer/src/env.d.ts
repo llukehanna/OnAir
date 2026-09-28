@@ -22,6 +22,16 @@ declare global {
     | 'probe_result'
     | 'all_sources_failed'
 
+  interface TeamInfo {
+    abbr: string
+    shortName: string
+    color: string | null      // '#rrggbb' or null
+    altColor: string | null   // '#rrggbb' or null
+    logo: string | null       // absolute https URL
+    score: number | null      // null before kickoff
+    record: string | null     // e.g. '3-0'
+  }
+
   interface Game {
     gameId: string
     league: LeagueId
@@ -29,6 +39,11 @@ declare global {
     teamAway: string
     startTime: number
     status: GameStatus
+    away?: TeamInfo
+    home?: TeamInfo
+    statusDetail?: string     // ESPN status.type.shortDetail, e.g. 'Q3 - 4:12', 'Halftime', 'Final'
+    network?: string          // first broadcast name, e.g. 'NBC'
+    venue?: string
   }
 
   interface Source {
