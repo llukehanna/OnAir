@@ -2,6 +2,10 @@ import Database from 'better-sqlite3'
 import { getDb } from '../connection'
 import type { Game, LeagueId, GameStatus } from '../../types'
 
+type GameDetail = Pick<Game, 'away' | 'home' | 'statusDetail' | 'network' | 'venue'>
+
+const DETAIL_KEYS = ['away', 'home', 'statusDetail', 'network', 'venue'] as const
+
 interface GameRow {
   game_id: string
   league: string
@@ -10,7 +14,29 @@ interface GameRow {
   start_time: number
   status: string
   raw_data: string | null
+  detail_json: string | null
   cached_at: number
+}
+
+function serializeDetail(game: Game): string | null {
+  const entries = DETAIL_KEYS.filter((k) => game[k] !== undefined).map((k) => [k, game[k]])
+  return entries.length > 0 ? JSON.stringify(Object.fromEntries(entries)) : null
+}
+
+/** Null or invalid JSON means the detail fields are simply absent. */
+function parseDetail(json: string | null): GameDetail {
+  if (!json) return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    return {}
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+  const source = parsed as Record<string, unknown>
+  return Object.fromEntries(
+    DETAIL_KEYS.filter((k) => source[k] !== undefined && source[k] !== null).map((k) => [k, source[k]])
+  ) as GameDetail
 }
 
 function rowToGame(row: GameRow): Game {
@@ -21,14 +47,15 @@ function rowToGame(row: GameRow): Game {
     teamAway: row.team_away,
     startTime: row.start_time,
     status: row.status as GameStatus,
+    ...parseDetail(row.detail_json),
   }
 }
 
 export function upsertGame(game: Game, rawData?: string | null, db?: Database.Database): void {
   const d = db ?? getDb()
   d.prepare(`
-    INSERT OR REPLACE INTO games (game_id, league, team_home, team_away, start_time, status, raw_data, cached_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO games (game_id, league, team_home, team_away, start_time, status, raw_data, detail_json, cached_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     game.gameId,
     game.league,
@@ -37,6 +64,7 @@ export function upsertGame(game: Game, rawData?: string | null, db?: Database.Da
     game.startTime,
     game.status,
     rawData ?? null,
+    serializeDetail(game),
     Date.now()
   )
 }
