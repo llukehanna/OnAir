@@ -235,13 +235,21 @@ export class PlaybackManager {
 
       // 3. Expired or no valid entries — full extraction via Playwright
       //    Hard 30s timeout prevents pool starvation from blocking the user forever.
+      //    The timer handle is kept and cleared once the race settles either
+      //    way — an un-cleared timer that wins nothing still fires 30s later
+      //    and, in tests, is what left Jest's process handle open past the
+      //    test run ("worker failed to exit gracefully").
+      let extractionTimeoutHandle: ReturnType<typeof setTimeout> | undefined
       const candidates = await Promise.race([
         this.getStreamCandidatesFn(target),
-        new Promise<StreamCandidate[]>((resolve) => setTimeout(() => {
-          console.warn('[PlaybackManager] extraction timed out after 30s')
-          resolve([])
-        }, 30_000)),
+        new Promise<StreamCandidate[]>((resolve) => {
+          extractionTimeoutHandle = setTimeout(() => {
+            console.warn('[PlaybackManager] extraction timed out after 30s')
+            resolve([])
+          }, 30_000)
+        }),
       ])
+      clearTimeout(extractionTimeoutHandle)
       if (candidates.length === 0) {
         this.state = 'IDLE'
         return { ok: false as const, reason: 'no_candidates' as const }

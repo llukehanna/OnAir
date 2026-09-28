@@ -5,6 +5,9 @@
 
 export type GuideCategory = 'all' | 'sports' | 'news' | 'entertainment' | 'other'
 
+/** The id prefix that marks a watch target as a 24/7 channel rather than a game. */
+export const CHANNEL_ID_PREFIX = 'ch:'
+
 export interface ChannelLike {
   channelId: string
   name: string
