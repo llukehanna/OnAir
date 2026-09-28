@@ -140,6 +140,11 @@
   animation: pulse-live 2s var(--ease-out) infinite;
 }
 
+.pillIcon {
+  flex: none;
+  color: var(--ink-2);
+}
+
 .liveWord {
   padding-right: 9px;
   border-right: 1px solid rgba(255, 255, 255, 0.22);

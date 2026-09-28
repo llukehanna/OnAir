@@ -1,4 +1,5 @@
 import React from 'react'
+import { CloudOff } from 'lucide-react'
 import { useGames } from '../../context/GamesContext'
 import { Hero, HeroSkeleton } from '../../components/Hero/Hero'
 import { Row } from '../../components/Row/Row'
@@ -88,7 +89,12 @@ export function HomeScreen({ selectedLeague, onGameClick }: HomeScreenProps): Re
 
   return (
     <div className={styles.container}>
-      {error && <div className={styles.banner}>Couldn’t refresh the schedule. Retrying.</div>}
+      {error && (
+        <div className={styles.banner}>
+          <CloudOff size={14} strokeWidth={2} aria-hidden="true" />
+          Couldn’t refresh the schedule. Retrying.
+        </div>
+      )}
       <Hero games={featured} onWatch={onGameClick} />
       <div className={styles.rows}>
         {shelf('Live now', live, 'lg')}
