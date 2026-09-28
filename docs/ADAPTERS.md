@@ -5,7 +5,6 @@ Everything after that is source-agnostic: matching, probing, ranking, playback, 
 
 OnAir ships no third-party adapters.
 The fixture source in `src/main/dev/fixture-adapter.ts` is the reference implementation.
-Only add adapters for streams you're permitted to access.
 
 ## The interface
 
