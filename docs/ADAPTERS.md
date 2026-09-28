@@ -3,8 +3,8 @@
 A source adapter answers one question: *for this game, where are the streams?*
 Everything after that is source-agnostic: matching, probing, ranking, playback, failover, continuity, and reliability tracking.
 
-OnAir ships no third-party adapters.
-The fixture source in `src/main/dev/fixture-adapter.ts` is the reference implementation.
+Built-in third-party adapters live in `src/main/adapters/sources/`, on top of the shared `InterceptAdapter` base (`intercept-base.ts`); add a new one by writing a config and adding it to `BUILTIN_ADAPTERS` there.
+The fixture source in `src/main/dev/fixture-adapter.ts` is the reference implementation for local/synthetic sources.
 
 ## The interface
 

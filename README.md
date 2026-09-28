@@ -48,8 +48,8 @@ More in [docs/FAILOVER.md](docs/FAILOVER.md) and [docs/ARCHITECTURE.md](docs/ARC
 Sources plug in through one interface, `SourceAdapter.getCandidateStreams(game)`.
 Everything downstream (matching, probing, ranking, playback, failover) is source-agnostic.
 
-OnAir ships no third-party sources.
-It includes a **fixture source**: a local HLS origin serving two streams with a sliding live window, which can be told to fail the way real sources do.
+OnAir ships with a small set of built-in third-party sources in `src/main/adapters/sources/`, each a config on the shared `InterceptAdapter` base and registered at startup.
+It also includes a **fixture source**: a local HLS origin serving two streams with a sliding live window, which can be told to fail the way real sources do.
 That's how the pipeline is developed, tested, and demoed.
 [docs/ADAPTERS.md](docs/ADAPTERS.md) covers writing an adapter for streams you have access to.
 

@@ -29,6 +29,11 @@ export interface RawStreamCandidate {
   cdnOrigin?: string | null
   /** The Referer header the CDN expects (typically the iframe origin + /). */
   cdnReferer?: string | null
+  /** Human-readable text the adapter matched the game against — typically the
+   *  listing link's label ("Lakers vs Celtics"). When present, the engine's
+   *  game matcher scores this instead of the stream URL, whose CDN path
+   *  never names teams. */
+  matchText?: string | null
   /** Pre-filled probe result from Playwright session context.
    *  When set, the prober skips the plain-fetch probe and uses this directly.
    *  This is necessary because many CDNs reject plain fetches that lack

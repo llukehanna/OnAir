@@ -16,6 +16,7 @@ import { startDiscovery, stopDiscovery } from './discovery/scheduler'
 import { startWarmer, stopWarmer, onGamesUpdated } from './engine/warmer'
 import { PlaywrightPool } from './adapters/pool'
 import { register } from './adapters/registry'
+import { registerBuiltinSources } from './adapters/sources'
 import { setupCors } from './playback/cors'
 import { initAdBlock, stopAdBlock } from './playback/adblock'
 import { PlaybackManager } from './playback/manager'
@@ -107,8 +108,10 @@ app.whenReady().then(async () => {
   // The pool launches Chromium lazily, on the first adapter that asks for a
   // page, so a session with only the fixture source never starts a browser.
 
-  // 3.5 Register source adapters (after pool, before handlers). Adapters
-  //     implement SourceAdapter in adapters/base.ts; none ship by default.
+  // 3.5 Register source adapters (after pool, before handlers). Built-in
+  //     third-party sources live in adapters/sources/; each is config-driven
+  //     on the shared InterceptAdapter base and seeds its own sources row.
+  registerBuiltinSources()
 
   // 3.6 Dev fixture source (ONAIR_FIXTURE=1 only). Serves two local HLS streams
   //     so the full pipeline can be exercised in the real UI with no external
