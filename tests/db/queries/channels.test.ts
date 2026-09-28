@@ -2,6 +2,7 @@ import { createTestDbWithMigrations } from '../../helpers/db'
 import {
   upsertChannelLinks,
   pruneChannelLinks,
+  pruneChannelLinksForSource,
   getChannels,
   getChannelById,
   getChannelLinks,
@@ -152,6 +153,58 @@ describe('channels queries', () => {
       const links = getChannelLinks('ch:espn', db)
       expect(links).toHaveLength(1)
       expect(links[0].sourceId).toBe('src_fresh')
+    })
+  })
+
+  describe('pruneChannelLinksForSource', () => {
+    it('removes only the named source\'s stale links, leaving another source\'s stale link alone', () => {
+      const db = createTestDbWithMigrations()
+      addSource(makeSource({ sourceId: 'src_a' }), db)
+      addSource(makeSource({ sourceId: 'src_b' }), db)
+
+      const now = 1_000_000
+      upsertChannelLinks('src_a', [
+        { channelId: 'ch:a-old', name: 'A Old', category: 'other', url: 'https://a.test/old', label: 'A Old' },
+      ], now - 100_000, db)
+      upsertChannelLinks('src_b', [
+        { channelId: 'ch:b-old', name: 'B Old', category: 'other', url: 'https://b.test/old', label: 'B Old' },
+      ], now - 100_000, db)
+
+      pruneChannelLinksForSource('src_a', 50_000, now, db)
+
+      expect(getChannelLinks('ch:a-old', db)).toEqual([])
+      expect(getChannels(db).some((c) => c.channelId === 'ch:a-old')).toBe(false)
+      // src_b's equally stale link is untouched — this call is scoped to src_a.
+      expect(getChannelLinks('ch:b-old', db)).toHaveLength(1)
+      expect(getChannels(db).some((c) => c.channelId === 'ch:b-old')).toBe(true)
+    })
+
+    it('removes a channel left with no links at all once its only source\'s link is pruned', () => {
+      const db = createTestDbWithMigrations()
+      addSource(makeSource({ sourceId: 'src_a' }), db)
+
+      const now = 1_000_000
+      upsertChannelLinks('src_a', [
+        { channelId: 'ch:gone', name: 'Gone', category: 'other', url: 'https://a.test/gone', label: 'Gone' },
+      ], now - 100_000, db)
+
+      pruneChannelLinksForSource('src_a', 50_000, now, db)
+
+      expect(getChannels(db).some((c) => c.channelId === 'ch:gone')).toBe(false)
+    })
+
+    it('leaves a source\'s fresh links alone', () => {
+      const db = createTestDbWithMigrations()
+      addSource(makeSource({ sourceId: 'src_a' }), db)
+
+      const now = 1_000_000
+      upsertChannelLinks('src_a', [
+        { channelId: 'ch:fresh', name: 'Fresh', category: 'other', url: 'https://a.test/fresh', label: 'Fresh' },
+      ], now, db)
+
+      pruneChannelLinksForSource('src_a', 50_000, now, db)
+
+      expect(getChannelLinks('ch:fresh', db)).toHaveLength(1)
     })
   })
 })

@@ -3,7 +3,7 @@ import type { SourceAdapter } from '../adapters/base'
 import type { PlaywrightPool } from '../adapters/pool'
 import type { Channel, ChannelCategory } from '../types'
 import { canonicalChannel } from './canonical'
-import { getChannels, pruneChannelLinks, upsertChannelLinks } from '../db/queries/channels'
+import { getChannels, pruneChannelLinksForSource, upsertChannelLinks } from '../db/queries/channels'
 
 // ---------------------------------------------------------------------------
 // Channel discovery scheduler
@@ -53,13 +53,20 @@ export async function discoverOnce(
       }
 
       upsertChannelLinks(adapter.sourceId, links, undefined, db)
+
+      // Prune this source's own stale links only when this pass actually
+      // listed something — a failed/blocked pass returns [] and is not
+      // evidence the source's previously-seen channels are gone, so its
+      // links must survive past 24h until a pass proves otherwise.
+      if (listings.length > 0) {
+        pruneChannelLinksForSource(adapter.sourceId, PRUNE_AGE_MS, undefined, db)
+      }
     } catch (err) {
       // One source's listing breaking must never cost the others theirs.
       console.warn(`[channels] ${adapter.sourceId} listChannels failed:`, err)
     }
   }
 
-  pruneChannelLinks(PRUNE_AGE_MS, undefined, db)
   return getChannels(db)
 }
 

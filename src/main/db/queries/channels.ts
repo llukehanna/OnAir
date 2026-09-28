@@ -97,6 +97,30 @@ export function pruneChannelLinks(olderThanMs: number, now?: number, db?: Databa
   `).run()
 }
 
+/**
+ * Same as pruneChannelLinks, but scoped to one source's own links. Callers
+ * (the channel scheduler) only invoke this for a source whose discovery pass
+ * just listed at least one channel — a pass that returned [] (blocked,
+ * timed out, site down) is not evidence the source's previously-seen
+ * channels are actually gone, so its links must be left alone regardless of
+ * age until a pass proves otherwise.
+ */
+export function pruneChannelLinksForSource(
+  sourceId: string,
+  olderThanMs: number,
+  now?: number,
+  db?: Database.Database
+): void {
+  const d = db ?? getDb()
+  const cutoff = (now ?? Date.now()) - olderThanMs
+
+  d.prepare('DELETE FROM channel_sources WHERE source_id = ? AND seen_at < ?').run(sourceId, cutoff)
+  d.prepare(`
+    DELETE FROM channels
+    WHERE channel_id NOT IN (SELECT DISTINCT channel_id FROM channel_sources)
+  `).run()
+}
+
 export function getChannels(db?: Database.Database): Channel[] {
   const d = db ?? getDb()
   const rows = d.prepare(`
