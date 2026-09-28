@@ -18,18 +18,20 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   render(): React.ReactNode {
     if (this.state.error) {
       return (
-        <div style={{ padding: 40, color: '#ff4444', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-          <h2 style={{ color: '#ff6666' }}>UI Crash</h2>
-          <p><strong>{this.state.error.message}</strong></p>
-          <pre style={{ fontSize: 12, color: '#999', maxHeight: '60vh', overflow: 'auto' }}>
-            {this.state.error.stack}
-          </pre>
-          <button
-            onClick={() => this.setState({ error: null })}
-            style={{ marginTop: 16, padding: '8px 16px', background: '#333', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-          >
-            Retry
-          </button>
+        <div style={{ height: '100vh', display: 'grid', placeItems: 'center', padding: 48, background: 'var(--bg)' }}>
+          <div style={{ maxWidth: 640, width: '100%' }}>
+            <h2 style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.04em' }}>Something broke in the interface</h2>
+            <p style={{ marginTop: 8, color: 'var(--ink-2)', fontSize: 15 }}>{this.state.error.message}</p>
+            <pre style={{ marginTop: 20, padding: 16, borderRadius: 12, background: 'var(--bg-raised)', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 11.5, maxHeight: '45vh', overflow: 'auto', whiteSpace: 'pre-wrap', userSelect: 'text' }}>
+              {this.state.error.stack}
+            </pre>
+            <button
+              onClick={() => this.setState({ error: null })}
+              style={{ marginTop: 20, height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--ink)', color: '#0b0b0c', fontWeight: 600 }}
+            >
+              Try again
+            </button>
+          </div>
         </div>
       )
     }
