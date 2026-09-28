@@ -186,6 +186,7 @@ function Lane({ channel, programs, win, now, gamesById, liveGameIds, onTune }: L
   // Same rule as the player's "On now": a live game stays current through
   // overtime, past its listed end.
   const current = onNow(programs, channel.channelId, now, liveGameIds)
+  const nowX = xFor(now, win.start)
 
   return (
     <div className={styles.lane} role="gridcell" style={{ width: LANE_W }}>
@@ -196,6 +197,7 @@ function Lane({ channel, programs, win, now, gamesById, liveGameIds, onTune }: L
           onClick={() => onTune(channel.channelId)}
           aria-label={`Watch ${channel.name}, live`}
         >
+          <Elapsed width={nowX - 2} />
           <span className={styles.inner}>
             <span className={styles.title}>Live</span>
             <span className={styles.sub}>No listings for this channel</span>
@@ -209,6 +211,7 @@ function Lane({ channel, programs, win, now, gamesById, liveGameIds, onTune }: L
             left={at.left}
             width={at.width}
             state={program === current ? 'now' : program.end <= now ? 'past' : 'future'}
+            nowX={nowX}
             game={program.gameId ? gamesById.get(program.gameId) : undefined}
             onTune={() => onTune(channel.channelId)}
           />
@@ -225,13 +228,15 @@ interface BlockProps {
   left: number
   width: number
   state: 'past' | 'now' | 'future'
+  /** The now position within the lane, for the current block's elapsed fill. */
+  nowX: number
   game: Game | undefined
   onTune: () => void
 }
 
 const timeRange = (p: GuideProgram) => `${formatClock(p.start).replace(/\s?[AP]M$/, '')} – ${formatClock(p.end)}`
 
-function Block({ program, left, width, state, game, onTune }: BlockProps): React.JSX.Element {
+function Block({ program, left, width, state, nowX, game, onTune }: BlockProps): React.JSX.Element {
   const live = game?.status === 'LIVE'
   const away = game ? teamOf(game, 'away') : null
   const home = game ? teamOf(game, 'home') : null
@@ -288,6 +293,8 @@ function Block({ program, left, width, state, game, onTune }: BlockProps): React
   if (state === 'now') {
     return (
       <button className={cls} style={style} onClick={onTune} aria-label={`Watch ${label}`}>
+        {/* Measured from the block's own left edge (2px inside its slot). */}
+        <Elapsed width={Math.min(width - 4, nowX - left - 2)} />
         {content}
       </button>
     )
@@ -297,6 +304,12 @@ function Block({ program, left, width, state, game, onTune }: BlockProps): React
       {content}
     </div>
   )
+}
+
+/** The now-line runs beneath the blocks; inside the current one, this marks it. */
+function Elapsed({ width }: { width: number }): React.JSX.Element | null {
+  if (width <= 0) return null
+  return <span className={styles.elapsed} style={{ width }} aria-hidden="true" />
 }
 
 // --- Empty and loading -----------------------------------------------------

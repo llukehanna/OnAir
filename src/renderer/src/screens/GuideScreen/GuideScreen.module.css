@@ -110,10 +110,12 @@
   position: relative;
 }
 
-/* Over the block glass, under the block labels (.inner is z 2). */
+/* Beneath the blocks (z 1), which are opaque: the line reads in the gaps
+   and empty lanes, never across a title. Inside the current block, the
+   elapsed fill takes over the job of marking now. */
 .nowLine {
   position: absolute;
-  z-index: 1;
+  z-index: 0;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -125,7 +127,7 @@
 }
 
 /* No per-row animation: an animated row becomes its own stacking context,
-   which would stop the now-line from slipping between block and label. */
+   and the blocks inside it would no longer layer against the now-line. */
 .row {
   display: flex;
 }
@@ -189,31 +191,37 @@
   /* clip, not hidden: hidden would make the block a scroll container and
      break the sticky label inside it. */
   overflow: clip;
-  background: rgba(255, 255, 255, 0.035);
+  z-index: 1;
+  /* Opaque (glass tones mixed into the canvas) so the now-line stays under. */
+  background: color-mix(in srgb, #fff 4%, var(--bg));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   transition: background var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
 }
 
 .past {
-  opacity: 0.45;
+  background: color-mix(in srgb, #fff 2%, var(--bg));
+}
+
+.past .inner {
+  opacity: 0.5;
 }
 
 .now {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, #fff 10%, var(--bg));
   box-shadow: var(--glass-hl), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 button.now:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, #fff 15%, var(--bg));
   box-shadow: var(--glass-hl), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 button.now:active {
-  background: rgba(255, 255, 255, 0.13);
+  background: color-mix(in srgb, #fff 12%, var(--bg));
 }
 
 .future:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, #fff 6%, var(--bg));
 }
 
 /* Team colors carry the game: a split edge, away over home. */
@@ -230,13 +238,34 @@ button.now:active {
 .game.now {
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--away) 22%, transparent), transparent 70%),
-    rgba(255, 255, 255, 0.09);
+    color-mix(in srgb, #fff 9%, var(--bg));
+}
+
+/* Elapsed part of the current program: a lighter wash up to now, edged by
+   a thin ink bar along the foot. Glass tones only; red stays for live. */
+.elapsed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.045);
+  pointer-events: none;
+  transition: width var(--dur-3) var(--ease);
+}
+
+.elapsed::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(245, 245, 244, 0.55);
 }
 
 /* The label stays in view while its block scrolls under the channel column. */
 .inner {
   position: sticky;
-  z-index: 2;
   left: calc(220px + 12px);
   display: flex;
   flex-direction: column;
