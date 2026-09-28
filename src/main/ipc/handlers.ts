@@ -10,6 +10,7 @@ import { getRecentEvents } from '../db/queries/events'
 import { getCacheEntries } from '../engine/cache'
 import { getChannels } from '../db/queries/channels'
 import { discoverOnce } from '../channels/scheduler'
+import { buildGuide } from '../channels/listings'
 import { getAllAdapters } from '../adapters/registry'
 import type { PlaywrightPool } from '../adapters/pool'
 
@@ -31,6 +32,14 @@ export function registerHandlers(playbackManager: PlaybackManager, pool?: Playwr
   ipcMain.handle('refresh-channels', async (_event) => {
     if (!pool) return getChannels()
     return discoverOnce(pool, getAllAdapters)
+  })
+
+  // Guide: builds fresh rather than reading a cache, so a renderer that
+  // opens the guide before the next scheduled refresh still sees current
+  // data. buildGuide never throws (fetchTvmaze swallows its own failures),
+  // so no try/catch is needed here.
+  ipcMain.handle('get-guide', async (_event) => {
+    return buildGuide({ channels: getChannels(), games: getGames() })
   })
 
   // Playback control

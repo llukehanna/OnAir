@@ -14,6 +14,9 @@ import {
 import { registerHandlers } from './ipc/handlers'
 import { startDiscovery, stopDiscovery } from './discovery/scheduler'
 import { startChannelDiscovery, stopChannelDiscovery } from './channels/scheduler'
+import { buildGuide } from './channels/listings'
+import { getChannels } from './db/queries/channels'
+import { getGames } from './db/queries/games'
 import { startWarmer, stopWarmer, onGamesUpdated } from './engine/warmer'
 import { PlaywrightPool } from './adapters/pool'
 import { register, getAllAdapters } from './adapters/registry'
@@ -23,8 +26,26 @@ import { initAdBlock, stopAdBlock } from './playback/adblock'
 import { PlaybackManager } from './playback/manager'
 import { getStreamCandidates } from './engine/index'
 
+const GUIDE_REFRESH_INTERVAL_MS = 30 * 60_000
+
 let pool: PlaywrightPool | null = null
 let playbackManager: PlaybackManager | null = null
+let guideIntervalHandle: ReturnType<typeof setInterval> | null = null
+
+/**
+ * Rebuilds the guide and pushes it to the window. Never throws — buildGuide
+ * itself never rejects (fetchTvmaze swallows its own failures), but this is
+ * the one refresh that must not be allowed to take the app down regardless,
+ * since it's also called from the games/channels update callbacks.
+ */
+async function refreshGuide(win: BrowserWindow): Promise<void> {
+  try {
+    const guide = await buildGuide({ channels: getChannels(), games: getGames() })
+    if (!win.isDestroyed()) win.webContents.send('guide-updated', guide)
+  } catch (err) {
+    console.warn('[guide] refresh failed:', err)
+  }
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -141,7 +162,10 @@ app.whenReady().then(async () => {
   registerHandlers(playbackManager, pool ?? undefined)
 
   // 7. Start discovery
-  startDiscovery(win, (update) => onGamesUpdated(update, pool ?? undefined))
+  startDiscovery(win, (update) => {
+    onGamesUpdated(update, pool ?? undefined)
+    void refreshGuide(win) // games changed — the guide's game rows may be stale
+  })
 
   // 7.5 Start pre-warmer (subscribes to games-updated via callback above)
   startWarmer(pool ?? undefined)
@@ -153,8 +177,15 @@ app.whenReady().then(async () => {
   if (pool) {
     startChannelDiscovery(pool, getAllAdapters, (channels) => {
       if (!win.isDestroyed()) win.webContents.send('channels-updated', channels)
+      void refreshGuide(win) // channel set changed — known-channel filtering may differ
     })
   }
+
+  // 7.7 Start the guide's own refresh timer. Games/channels updates above
+  //     already trigger a refresh; this catches TVmaze's schedule moving on
+  //     its own (a show starting/ending) between those events.
+  void refreshGuide(win)
+  guideIntervalHandle = setInterval(() => void refreshGuide(win), GUIDE_REFRESH_INTERVAL_MS)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -172,6 +203,10 @@ app.on('before-quit', () => {
   void stopFixtureServers()  // no-op unless fixture mode was enabled
   stopDiscovery()
   stopChannelDiscovery()
+  if (guideIntervalHandle !== null) {
+    clearInterval(guideIntervalHandle)
+    guideIntervalHandle = null
+  }
   pool?.shutdown()
   closeDb()
 })
