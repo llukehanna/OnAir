@@ -1,12 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { ArrowLeftRight } from 'lucide-react'
 import styles from './FailoverToast.module.css'
 
 interface ToastEntry {
   id: number
   sourceName: string
-  dismissing: boolean
+  manual: boolean
+  leaving: boolean
 }
 
+const SHOW_MS = 3200
+const LEAVE_MS = 320
+
+/** Announces every source switch; a failover the viewer never saw is still worth knowing about. */
 export function FailoverToast(): React.JSX.Element | null {
   const [toasts, setToasts] = useState<ToastEntry[]>([])
   const nextId = useRef(0)
@@ -19,27 +25,14 @@ export function FailoverToast(): React.JSX.Element | null {
 
     const unsub = window.onair.onPlaybackEvent((event) => {
       if (event.type !== 'source_switch') return
-
-      const sourceName = (event.details?.sourceName as string) ?? 'Unknown'
+      const sourceName = (event.details?.sourceName as string) ?? 'another source'
+      const manual = event.details?.reason === 'user_selected'
       const id = nextId.current++
 
-      setToasts((prev) => [...prev, { id, sourceName, dismissing: false }])
-
-      // Start dismiss animation 200ms before removal
-      timers.add(
-        setTimeout(() => {
-          setToasts((prev) =>
-            prev.map((t) => (t.id === id ? { ...t, dismissing: true } : t))
-          )
-        }, 2800)
-      )
-
-      // Auto-dismiss after 3 seconds
-      timers.add(
-        setTimeout(() => {
-          setToasts((prev) => prev.filter((t) => t.id !== id))
-        }, 3000)
-      )
+      // One at a time: a newer switch replaces the older notice.
+      setToasts([{ id, sourceName, manual, leaving: false }])
+      timers.add(setTimeout(() => setToasts((p) => p.map((t) => (t.id === id ? { ...t, leaving: true } : t))), SHOW_MS))
+      timers.add(setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), SHOW_MS + LEAVE_MS))
     })
 
     return () => {
@@ -51,14 +44,14 @@ export function FailoverToast(): React.JSX.Element | null {
   if (toasts.length === 0) return null
 
   return (
-    <div className={styles.toastContainer} aria-live="polite" aria-atomic="false">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`${styles.toast} ${toast.dismissing ? styles.toastDismissing : ''}`}
-          role="status"
-        >
-          Switching to {toast.sourceName}...
+    <div className={styles.container} aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`${styles.toast} ${t.leaving ? styles.leaving : ''}`} role="status">
+          <span className={styles.icon} aria-hidden="true"><ArrowLeftRight size={14} strokeWidth={2.2} /></span>
+          <span>
+            Switched to <b>{t.sourceName}</b>
+          </span>
+          {!t.manual && <span className={styles.note}>no interruption</span>}
         </div>
       ))}
     </div>
