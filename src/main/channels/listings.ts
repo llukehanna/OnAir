@@ -113,6 +113,60 @@ function overlaps(a: GuideProgram, b: GuideProgram): boolean {
 }
 
 /**
+ * Slug suffixes a source might append (or a source might omit) relative to
+ * another source's spelling of the same channel — e.g. TVmaze's "Fox News
+ * Channel" (ch:foxnewschannel) vs. a scraped source's "Fox News"
+ * (ch:foxnews); TVmaze's "Fox Business" (ch:foxbusiness, hypothetically) vs.
+ * a source's "Fox Business Network" (ch:foxbusinessnetwork). canonicalChannel
+ * has no way to know which spelling is "the" channel — it just canonicalizes
+ * whatever label it's given — so a genuinely different id from the one a
+ * source actually registered under is a real, if narrow, class of mismatch.
+ */
+const CHANNEL_ID_SUFFIXES = ['channel', 'network', 'tv'] as const
+
+/**
+ * Resolves `id` against the set of known channel ids, tolerating one of the
+ * suffixes above being present on one side and not the other:
+ *   1. Exact match wins outright.
+ *   2. `id` with a trailing suffix stripped, if THAT'S known.
+ *   3. `id` with a trailing suffix added, if THAT'S known.
+ * Returns null when none of the above land — callers treat that exactly as
+ * they would an id that was never resolved at all.
+ */
+export function resolveKnownChannelId(id: string, knownIds: Set<string>): string | null {
+  if (knownIds.has(id)) return id
+
+  for (const suffix of CHANNEL_ID_SUFFIXES) {
+    if (id.endsWith(suffix)) {
+      const stripped = id.slice(0, -suffix.length)
+      if (stripped.length > 0 && knownIds.has(stripped)) return stripped
+    }
+  }
+
+  for (const suffix of CHANNEL_ID_SUFFIXES) {
+    const withSuffix = `${id}${suffix}`
+    if (knownIds.has(withSuffix)) return withSuffix
+  }
+
+  return null
+}
+
+/**
+ * Rewrites each program's channelId to its resolved known id, when
+ * resolveKnownChannelId finds one — otherwise leaves it as-is (so an
+ * unresolved id still simply fails the known-channel filter downstream,
+ * same as before this existed). Applied to games and shows separately,
+ * before mergePrograms, so the same-channel overlap rule in mergePrograms
+ * compares resolved ids rather than two spellings of the same channel.
+ */
+function resolveProgramChannels(programs: GuideProgram[], knownIds: Set<string>): GuideProgram[] {
+  return programs.map((program) => {
+    const resolved = resolveKnownChannelId(program.channelId, knownIds)
+    return resolved ? { ...program, channelId: resolved } : program
+  })
+}
+
+/**
  * Combines games and shows into one guide: a show overlapping a game on the
  * SAME channel loses — the game is what's actually airing — while a show on
  * another channel, or one that doesn't overlap, survives. Sorted by channel
@@ -180,11 +234,12 @@ export async function buildGuide(deps: {
 
   const episodes = await fetchTvmaze(dates, deps.fetchFn)
 
-  const games = gamePrograms(deps.games)
-  const shows = tvmazePrograms(episodes)
+  const knownChannelIds = new Set(deps.channels.map((c) => c.channelId))
+
+  const games = resolveProgramChannels(gamePrograms(deps.games), knownChannelIds)
+  const shows = resolveProgramChannels(tvmazePrograms(episodes), knownChannelIds)
   const merged = mergePrograms(games, shows)
 
-  const knownChannelIds = new Set(deps.channels.map((c) => c.channelId))
   const windowStart = now - GUIDE_LOOKBACK_MS
   const windowEnd = now + GUIDE_LOOKAHEAD_MS
 
