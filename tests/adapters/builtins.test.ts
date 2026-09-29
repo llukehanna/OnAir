@@ -92,6 +92,7 @@ const testConfig: InterceptAdapterConfig = {
   confidenceWeight: 0.5,
   gameLinkPatterns: [/\/watch\//],
   interceptTimeoutMs: 150,
+  listingRenderTimeoutMs: 50,
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,27 @@ describe('InterceptAdapter', () => {
     // User priority so clicks preempt background refreshes; always released.
     expect(acquire).toHaveBeenCalledWith('user')
     expect(release).toHaveBeenCalledWith(page)
+  })
+
+  it('waits for a client-rendered listing before giving up on the game link', async () => {
+    // tvapp1.com / thetvapp.st render their game cards via JS after
+    // 'domcontentloaded': the first scans see only nav links.
+    const page = makeMockPage({ streamUrl: 'https://cdn.example/live/game.m3u8' })
+    let scans = 0
+    ;(page.evaluate as jest.Mock).mockImplementation(async () => {
+      scans++
+      if (scans <= 3) return [{ url: 'https://test.example/watch/nba-streams', text: 'NBA' }]
+      return [{ url: 'https://test.example/watch/2610869', text: 'NBA Boston Celtics at Los Angeles Lakers ★ 3 sources HD' }]
+    })
+    const { pool } = makeFakePool(page)
+    const adapter = new TestAdapter({ ...testConfig, listingRenderTimeoutMs: 5_000 })
+
+    const candidates = await adapter.getCandidateStreams(game, pool)
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].refererUrl).toBe('https://test.example/watch/2610869')
+    expect(candidates[0].matchText).toBe('NBA Boston Celtics at Los Angeles Lakers ★ 3 sources HD')
+    expect(page.waitForTimeout).toHaveBeenCalled()
   })
 
   it('returns [] when no listing link names the game', async () => {

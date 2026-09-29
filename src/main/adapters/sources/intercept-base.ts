@@ -63,6 +63,11 @@ export interface InterceptAdapterConfig {
   /** Minimum link-label match confidence to follow a listing link (default 0.5). */
   readonly matchThreshold?: number
   /**
+   * Max wait for a client-rendered listing to show the game's link before
+   * falling back to the listing page itself (default 5s).
+   */
+  readonly listingRenderTimeoutMs?: number
+  /**
    * This source's 24/7 channel listing. Omit when the source has no usable
    * one (no flat page of channel links to scan) — listChannels() then always
    * returns [], same as an adapter that never implemented it.
@@ -292,6 +297,20 @@ export class InterceptAdapter implements SourceAdapter {
    * over its label. The best-scoring link wins; ties keep the first.
    */
   protected async findGameLink(page: Page, game: Game): Promise<GameLink | null> {
+    // tvapp1.com and thetvapp.st render their game cards via JS after
+    // 'domcontentloaded' — a single immediate scan sees only nav links. Poll
+    // until the game's link appears, bounded so a listing that simply
+    // doesn't carry the game falls through quickly.
+    const deadline = Date.now() + (this.config.listingRenderTimeoutMs ?? 5_000)
+    for (;;) {
+      const link = await this.scanForGameLink(page, game)
+      if (link !== null || Date.now() >= deadline) return link
+      await page.waitForTimeout(250).catch(() => {})
+    }
+  }
+
+  /** One pass of findGameLink over the anchors currently on the page. */
+  protected async scanForGameLink(page: Page, game: Game): Promise<GameLink | null> {
     const patterns = this.config.gameLinkPatterns ?? DEFAULT_GAME_LINK_PATTERNS
     const threshold = this.config.matchThreshold ?? 0.5
 
