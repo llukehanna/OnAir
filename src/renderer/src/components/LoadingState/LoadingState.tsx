@@ -57,7 +57,8 @@ interface AllSourcesFailedProps {
   /** A channel reads "this channel" where a game reads "this game". */
   kind?: 'game' | 'channel'
   onRetry: () => void
-  onPickSource: () => void
+  /** Omit when no source has this game — the drawer would only say so. */
+  onPickSource?: () => void
   onBack: () => void
   onOpenDiagnostics: () => void
   /** Machine-readable reason from usePlayback. */
@@ -157,10 +158,12 @@ export function AllSourcesFailed({
             <RotateCw size={15} strokeWidth={2.2} />
             Try again
           </button>
-          <button className={styles.secondary} onClick={onPickSource}>
-            <ListVideo size={15} strokeWidth={2.2} />
-            Pick a source
-          </button>
+          {onPickSource && (
+            <button className={styles.secondary} onClick={onPickSource}>
+              <ListVideo size={15} strokeWidth={2.2} />
+              Pick a source
+            </button>
+          )}
         </div>
         <div className={styles.links}>
           <button className={styles.link} onClick={onBack}>{kind === 'channel' ? 'Back to guide' : 'Back to games'}</button>

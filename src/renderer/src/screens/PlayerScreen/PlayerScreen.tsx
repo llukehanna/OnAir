@@ -76,6 +76,22 @@ export function PlayerScreen({
 
   const media = usePlayerMedia({ video0Ref, video1Ref, activeRef, liveLatency, streamKey: activeCandidateId })
 
+  // "Pick a source" only opens the drawer's source list — pointless when no
+  // source has this game, so the error card offers it only when one does.
+  const [hasCandidates, setHasCandidates] = useState(false)
+  useEffect(() => {
+    if (playerState !== 'error' || !gameId) return
+    let cancelled = false
+    setHasCandidates(false)
+    window.onair
+      .getCandidatesForGame(gameId)
+      .then((candidates) => { if (!cancelled) setHasCandidates(candidates.length > 0) })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [playerState, gameId])
+
   // --- Stream facts for the drawer -------------------------------------------
 
   // Resolve the on-screen candidate to something a person can read. Candidates
@@ -274,7 +290,7 @@ export function PlayerScreen({
             kind={channelNow ? 'channel' : 'game'}
             reason={errorReason}
             onRetry={onRetry}
-            onPickSource={() => setDrawer(true)}
+            onPickSource={hasCandidates ? () => setDrawer(true) : undefined}
             onBack={onBack}
             onOpenDiagnostics={onOpenDiagnostics}
           />
