@@ -38,7 +38,7 @@ function makeChannel(channelId: string, name: string): Channel {
 
 describe('GAME_MINUTES', () => {
   it('has the expected minute counts per league', () => {
-    expect(GAME_MINUTES).toEqual({ nfl: 195, cfb: 210, mlb: 180, nba: 150, cbb: 120 })
+    expect(GAME_MINUTES).toEqual({ nfl: 195, cfb: 210, mlb: 180, nba: 150, nhl: 150, cbb: 120 })
   })
 })
 

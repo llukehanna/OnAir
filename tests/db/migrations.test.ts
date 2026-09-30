@@ -38,7 +38,7 @@ describe('runMigrations', () => {
       db.prepare('SELECT version FROM schema_version ORDER BY version').all() as { version: number }[]
     ).map((row) => row.version)
 
-    expect(versions).toEqual([1, 2, 3])
+    expect(versions).toEqual([1, 2, 3, 4])
 
     db.close()
   })
@@ -220,6 +220,30 @@ describe('runMigrations', () => {
 
       expect(indexes).toContain('idx_candidates_game')
       expect(indexes).toContain('idx_candidates_probed_at')
+
+      db.close()
+    })
+  })
+
+  describe('v4 sources_add_nhl', () => {
+    it('adds nhl to rows still on the old default list and leaves edited rows alone', () => {
+      const db = createTestDbWithMigrations()
+      const insert = db.prepare(`
+        INSERT INTO sources (source_id, name, base_url, classification, supported_leagues,
+          extraction_method, confidence_weight, health_state, enabled, needs_adapter, added_at)
+        VALUES (?, ?, 'https://example.invalid', 'mixed_aggregator', ?, 'network_intercept', 0.5, 'unknown', 1, 0, 0)
+      `)
+      insert.run('seeded', 'Seeded', JSON.stringify(['nba', 'nfl', 'mlb', 'cbb', 'cfb']))
+      insert.run('edited', 'Edited', JSON.stringify(['nba']))
+
+      // Re-run v4 as if upgrading a v3 database that already had these rows.
+      db.prepare('DELETE FROM schema_version WHERE version = 4').run()
+      runMigrations(db)
+
+      const leagues = (id: string): string[] =>
+        JSON.parse((db.prepare('SELECT supported_leagues FROM sources WHERE source_id = ?').get(id) as { supported_leagues: string }).supported_leagues)
+      expect(leagues('seeded')).toEqual(['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'])
+      expect(leagues('edited')).toEqual(['nba'])
 
       db.close()
     })

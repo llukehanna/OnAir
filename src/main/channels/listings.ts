@@ -23,6 +23,7 @@ export const GAME_MINUTES: Record<LeagueId, number> = {
   cfb: 210,
   mlb: 180,
   nba: 150,
+  nhl: 150,
   cbb: 120,
 }
 

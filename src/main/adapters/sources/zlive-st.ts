@@ -21,7 +21,7 @@ export class ZliveStAdapter extends InterceptAdapter {
       baseUrl: 'https://zlive.st/',
       // One page mixes matches with general TV channels.
       classification: 'mixed_aggregator',
-      supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'],
+      supportedLeagues: ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'],
       confidenceWeight: 0.6,
       embedPlayerPatterns: [/zlive\.st\/(?:embed|player|watch)/i],
       channels: {

@@ -25,7 +25,7 @@ export class Streamsports99Adapter extends InterceptAdapter {
       baseUrl: 'https://streamsports99.ru/live-tv',
       // Channel-first listing; events are matched by their link label.
       classification: 'channel_first',
-      supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'],
+      supportedLeagues: ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'],
       confidenceWeight: 0.55,
       embedPlayerPatterns: [/streamsports99\.ru\/(?:embed|player|watch|channel)/i],
       channels: {

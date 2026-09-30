@@ -104,7 +104,7 @@ export function upsertFixtureSource(): void {
     name: 'Dev Fixture',
     baseUrl: 'http://127.0.0.1',
     classification: 'event_first',
-    supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'],
+    supportedLeagues: ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'],
     extractionMethod: 'network_intercept',
     confidenceWeight: 1.0,
     healthState: 'healthy',
@@ -120,7 +120,7 @@ export class FixtureAdapter implements SourceAdapter {
   readonly name = 'Dev Fixture'
   readonly baseUrl = 'http://127.0.0.1'
   readonly classification = 'event_first' as const
-  readonly supportedLeagues: LeagueId[] = ['nba', 'nfl', 'mlb', 'cbb', 'cfb']
+  readonly supportedLeagues: LeagueId[] = ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb']
   readonly extractionMethod = 'network_intercept' as const
   readonly confidenceWeight = 1.0
 
