@@ -21,7 +21,9 @@ function makeTvAppConfig(host: string, path: string, sourceId: string, name: str
     baseUrl: `https://${host}${path}`,
     classification: 'mixed_aggregator',
     supportedLeagues: ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'] as LeagueId[],
-    confidenceWeight: 0.6,
+    // The most dependable game listings of the built-ins: every live game,
+    // one page per game, streams that start. Dispatched and ranked first.
+    confidenceWeight: 0.85,
     embedPlayerPatterns: [new RegExp(`${host.replace(/\./g, '\\.')}/(?:embed|player|watch|channel)`, 'i')],
   }
 }

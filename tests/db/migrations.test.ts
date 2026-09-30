@@ -38,7 +38,7 @@ describe('runMigrations', () => {
       db.prepare('SELECT version FROM schema_version ORDER BY version').all() as { version: number }[]
     ).map((row) => row.version)
 
-    expect(versions).toEqual([1, 2, 3, 4])
+    expect(versions).toEqual([1, 2, 3, 4, 5])
 
     db.close()
   })
@@ -244,6 +244,32 @@ describe('runMigrations', () => {
         JSON.parse((db.prepare('SELECT supported_leagues FROM sources WHERE source_id = ?').get(id) as { supported_leagues: string }).supported_leagues)
       expect(leagues('seeded')).toEqual(['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'])
       expect(leagues('edited')).toEqual(['nba'])
+
+      db.close()
+    })
+  })
+
+  describe('v5 thetvapp_confidence', () => {
+    it('raises TheTVApp rows still on the old 0.6 seed and leaves edited rows alone', () => {
+      const db = createTestDbWithMigrations()
+      const insert = db.prepare(`
+        INSERT INTO sources (source_id, name, base_url, classification, supported_leagues,
+          extraction_method, confidence_weight, health_state, enabled, needs_adapter, added_at)
+        VALUES (?, ?, 'https://example.invalid', 'mixed_aggregator', '["nba"]', 'network_intercept', ?, 'unknown', 1, 0, 0)
+      `)
+      insert.run('tvapp1-com', 'Seeded', 0.6)
+      insert.run('thetvapp-st', 'Edited', 0.3)
+      insert.run('ntv-st', 'Other source', 0.6)
+
+      // Re-run v5 as if upgrading a v4 database that already had these rows.
+      db.prepare('DELETE FROM schema_version WHERE version = 5').run()
+      runMigrations(db)
+
+      const weight = (id: string): number =>
+        (db.prepare('SELECT confidence_weight FROM sources WHERE source_id = ?').get(id) as { confidence_weight: number }).confidence_weight
+      expect(weight('tvapp1-com')).toBe(0.85)
+      expect(weight('thetvapp-st')).toBe(0.3)
+      expect(weight('ntv-st')).toBe(0.6)
 
       db.close()
     })

@@ -391,6 +391,93 @@ describe('collectAndRankCandidates — ranking', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: dispatch order
+//
+// Adapters queue for a 4-page browser pool in call order, so the order they
+// are called in decides which sources get a page first. The most reliable
+// must go first, or weaker sources starve them past the 30s extraction
+// timeout.
+// ---------------------------------------------------------------------------
+
+describe('collectAndRankCandidates — dispatch order', () => {
+  function seedHistory(
+    db: ReturnType<typeof createTestDbWithMigrations>,
+    sourceId: string,
+    successes: number,
+    failures: number
+  ) {
+    db.prepare(`
+      INSERT INTO source_reliability
+        (source_id, league, startup_successes, startup_failures, total_startup_time_ms,
+         buffer_events, switch_events, total_sessions, consecutive_failures, last_updated)
+      VALUES (?, 'nba', ?, ?, 0, 0, 0, ?, 0, ?)
+    `).run(sourceId, successes, failures, successes + failures, Date.now())
+  }
+
+  async function callOrder(
+    db: ReturnType<typeof createTestDbWithMigrations>,
+    specs: { sourceId: string; confidenceWeight: number }[]
+  ): Promise<string[]> {
+    const order: string[] = []
+    const adapters = specs.map((spec) =>
+      createMockAdapter({
+        ...spec,
+        getCandidateStreams: jest.fn(async () => {
+          order.push(spec.sourceId)
+          return []
+        }),
+      })
+    )
+    await collectAndRankCandidates(gameTarget(NBA_GAME), undefined, db, makeMockFetch(), () => adapters)
+    return order
+  }
+
+  it('calls higher-confidence sources first when none has history', async () => {
+    const db = createTestDbWithMigrations()
+    seedGame(db)
+    for (const id of ['src_weak', 'src_strong', 'src_mid']) seedSource(db, id)
+
+    expect(
+      await callOrder(db, [
+        { sourceId: 'src_weak', confidenceWeight: 0.4 },
+        { sourceId: 'src_strong', confidenceWeight: 0.85 },
+        { sourceId: 'src_mid', confidenceWeight: 0.6 },
+      ])
+    ).toEqual(['src_strong', 'src_mid', 'src_weak'])
+  })
+
+  it('puts a proven source ahead of an untried higher-confidence one', async () => {
+    const db = createTestDbWithMigrations()
+    seedGame(db)
+    seedSource(db, 'src_untried')
+    seedSource(db, 'src_proven')
+    seedHistory(db, 'src_proven', 9, 1)
+
+    expect(
+      await callOrder(db, [
+        { sourceId: 'src_untried', confidenceWeight: 0.85 },
+        { sourceId: 'src_proven', confidenceWeight: 0.4 },
+      ])
+    ).toEqual(['src_proven', 'src_untried'])
+  })
+
+  it('puts a source that keeps failing last', async () => {
+    const db = createTestDbWithMigrations()
+    seedGame(db)
+    seedSource(db, 'src_failing')
+    seedSource(db, 'src_untried')
+    seedHistory(db, 'src_failing', 0, 6)
+
+    expect(
+      await callOrder(db, [
+        { sourceId: 'src_failing', confidenceWeight: 0.85 },
+        { sourceId: 'src_untried', confidenceWeight: 0.4 },
+      ])
+    ).toEqual(['src_untried', 'src_failing'])
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: error handling
 // ---------------------------------------------------------------------------
 
