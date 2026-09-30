@@ -400,7 +400,7 @@ describe('registerBuiltinSources / ensureBuiltinSourceRows', () => {
 
     const adopted = getSourceById('ntv-st', db)!
     expect(adopted.needsAdapter).toBe(false)
-    expect(adopted.supportedLeagues).toEqual(['nba', 'nfl', 'mlb', 'cbb', 'cfb'])
+    expect(adopted.supportedLeagues).toEqual(['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'])
     expect(adopted.classification).toBe('mixed_aggregator')
   })
 

@@ -5,6 +5,7 @@ export const ESPN_ENDPOINTS: Record<LeagueId, string> = {
   nba: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
   nfl: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
   mlb: 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
+  nhl: 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',
   cbb: 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard',
   cfb: 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
 }

@@ -105,6 +105,44 @@ const MLB_ALIASES: Record<string, string[]> = {
   'Washington Nationals':   ['Nationals', 'WSH', 'WAS', 'Washington', 'Nats'],
 }
 
+// Keys are ESPN's displayName. Left out on purpose: bare 'New York' (two
+// teams), bare 'LA' (every LA franchise in every league), 'Wild' ("Wild
+// Card") and 'Hawks' (Atlanta's NBA team).
+const NHL_ALIASES: Record<string, string[]> = {
+  'Anaheim Ducks':          ['Ducks', 'ANA', 'Anaheim'],
+  'Boston Bruins':          ['Bruins', 'BOS', 'Boston'],
+  'Buffalo Sabres':         ['Sabres', 'BUF', 'Buffalo'],
+  'Calgary Flames':         ['Flames', 'CGY', 'Calgary'],
+  'Carolina Hurricanes':    ['Hurricanes', 'CAR', 'Carolina', 'Canes'],
+  'Chicago Blackhawks':     ['Blackhawks', 'CHI', 'Chicago'],
+  'Colorado Avalanche':     ['Avalanche', 'COL', 'Colorado', 'Avs'],
+  'Columbus Blue Jackets':  ['Blue Jackets', 'CBJ', 'Columbus', 'Jackets'],
+  'Dallas Stars':           ['Stars', 'DAL', 'Dallas'],
+  'Detroit Red Wings':      ['Red Wings', 'DET', 'Detroit', 'Wings'],
+  'Edmonton Oilers':        ['Oilers', 'EDM', 'Edmonton'],
+  'Florida Panthers':       ['Panthers', 'FLA', 'Florida'],
+  'Los Angeles Kings':      ['Kings', 'LAK', 'LA Kings'],
+  'Minnesota Wild':         ['MIN', 'Minnesota'],
+  'Montreal Canadiens':     ['Canadiens', 'MTL', 'Montreal', 'Montréal', 'Habs'],
+  'Nashville Predators':    ['Predators', 'NSH', 'Nashville', 'Preds'],
+  'New Jersey Devils':      ['Devils', 'NJ', 'NJD', 'New Jersey'],
+  'New York Islanders':     ['Islanders', 'NYI', 'NY Islanders', 'Isles'],
+  'New York Rangers':       ['Rangers', 'NYR', 'NY Rangers'],
+  'Ottawa Senators':        ['Senators', 'OTT', 'Ottawa', 'Sens'],
+  'Philadelphia Flyers':    ['Flyers', 'PHI', 'Philadelphia', 'Philly'],
+  'Pittsburgh Penguins':    ['Penguins', 'PIT', 'Pittsburgh', 'Pens'],
+  'San Jose Sharks':        ['Sharks', 'SJ', 'SJS', 'San Jose'],
+  'Seattle Kraken':         ['Kraken', 'SEA', 'Seattle'],
+  'St. Louis Blues':        ['Blues', 'STL', 'St. Louis', 'St Louis'],
+  'Tampa Bay Lightning':    ['Lightning', 'TB', 'TBL', 'Tampa Bay', 'Bolts'],
+  'Toronto Maple Leafs':    ['Maple Leafs', 'TOR', 'Toronto', 'Leafs'],
+  'Utah Mammoth':           ['Mammoth', 'UTAH', 'UTA', 'Utah', 'Utah Hockey Club', 'Utah HC'],
+  'Vancouver Canucks':      ['Canucks', 'VAN', 'Vancouver'],
+  'Vegas Golden Knights':   ['Golden Knights', 'VGK', 'Vegas', 'Knights'],
+  'Washington Capitals':    ['Capitals', 'WSH', 'Washington', 'Caps'],
+  'Winnipeg Jets':          ['Jets', 'WPG', 'Winnipeg'],
+}
+
 const CBB_ALIASES: Record<string, string[]> = {
   'Duke Blue Devils':           ['Duke', 'Blue Devils'],
   'Kentucky Wildcats':          ['Kentucky', 'Wildcats', 'UK'],
@@ -197,6 +235,7 @@ const ALIASES: Record<LeagueId, Record<string, string[]>> = {
   nba: NBA_ALIASES,
   nfl: NFL_ALIASES,
   mlb: MLB_ALIASES,
+  nhl: NHL_ALIASES,
   cbb: CBB_ALIASES,
   cfb: CFB_ALIASES,
 }
@@ -214,6 +253,45 @@ const AMBIGUOUS_NICKNAMES = new Set([
 /** Lowercase words separated by single spaces; punctuation becomes a break. */
 function toWords(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+// ─── Cross-league names ───────────────────────────────────────────────────────
+// Leagues share cities and nicknames, and their seasons overlap: a listing
+// "Boston Celtics vs Toronto Raptors" contains "Boston" and "Toronto", which
+// would otherwise match a Bruins–Maple Leafs game at 0.9. Every multi-word
+// name any team goes by, tagged with its owner, lets matchTeam tell that a
+// shorter alias only appeared inside some other team's name.
+
+interface TeamPhrase {
+  owner: string
+  words: string
+}
+
+const TEAM_PHRASES: TeamPhrase[] = Object.values(ALIASES).flatMap((teams) =>
+  Object.entries(teams).flatMap(([full, aliases]) =>
+    [full, ...aliases]
+      .map((name) => ({ owner: toWords(full), words: toWords(name) }))
+      .filter((p) => p.words.includes(' '))
+  )
+)
+
+/**
+ * True when every place `alias` appears in `text` is explained by a longer
+ * name belonging to a different team — "boston" inside "boston celtics"
+ * when the team being matched is the Bruins.
+ */
+function onlyInsideOtherTeam(alias: string, teamName: string, ownNames: Set<string>, text: string): boolean {
+  const owner = toWords(teamName)
+  const needle = ` ${alias} `
+  let rest = text
+  for (const p of TEAM_PHRASES) {
+    if (p.owner === owner || p.words === alias || ownNames.has(p.words)) continue
+    const phrase = ` ${p.words} `
+    if (phrase.includes(needle) && rest.includes(phrase)) {
+      rest = rest.split(phrase).join(' ')
+    }
+  }
+  return rest !== text && !rest.includes(needle)
 }
 
 // ─── matchTeam ────────────────────────────────────────────────────────────────
@@ -238,10 +316,12 @@ export function matchTeam(
   // Whole words only: a bare substring test let 'NE' (Patriots) match
   // "network" and 'NO' (Saints) match "north".
   const text = ` ${toWords(normalizedText)} `
+  const ownNames = new Set(candidates.map(toWords))
 
   for (const alias of candidates) {
     const aliasLower = toWords(alias)
     if (!aliasLower || !text.includes(` ${aliasLower} `)) continue
+    if (onlyInsideOtherTeam(aliasLower, teamName, ownNames, text)) continue
 
     // Match found — determine if it is a bare ambiguous nickname
     const isSingleWord = !aliasLower.includes(' ')

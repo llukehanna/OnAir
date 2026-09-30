@@ -25,7 +25,7 @@ export class FamelackAdapter extends InterceptAdapter {
       baseUrl: 'https://famelack.com/',
       // A channel directory; never a per-game page.
       classification: 'channel_first',
-      supportedLeagues: ['nba', 'nfl', 'mlb', 'cbb', 'cfb'],
+      supportedLeagues: ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb'],
       confidenceWeight: 0.4,
       embedPlayerPatterns: [/famelack\.com\/(?:embed|player|watch|channel|video)/i],
     })

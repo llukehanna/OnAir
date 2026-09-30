@@ -1,4 +1,4 @@
-export type LeagueId = 'nba' | 'nfl' | 'mlb' | 'cbb' | 'cfb'
+export type LeagueId = 'nba' | 'nfl' | 'mlb' | 'nhl' | 'cbb' | 'cfb'
 
 export type GameStatus = 'LIVE' | 'STARTING_SOON' | 'RECENTLY_ENDED' | 'SCHEDULED'
 

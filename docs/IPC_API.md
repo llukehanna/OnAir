@@ -12,7 +12,7 @@ Games seen by discovery in the last 24 hours, optionally filtered to one league.
 ```ts
 interface Game {
   gameId: string        // `${league}_${espnEventId}`
-  league: 'nba' | 'nfl' | 'mlb' | 'cbb' | 'cfb'
+  league: 'nba' | 'nfl' | 'mlb' | 'nhl' | 'cbb' | 'cfb'
   teamHome: string
   teamAway: string
   startTime: number     // Unix ms

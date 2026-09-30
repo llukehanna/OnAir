@@ -6,7 +6,7 @@
 // must be in an ambient (non-module) file, and this file is a module.
 
 declare global {
-  type LeagueId = 'nba' | 'nfl' | 'mlb' | 'cbb' | 'cfb'
+  type LeagueId = 'nba' | 'nfl' | 'mlb' | 'nhl' | 'cbb' | 'cfb'
 
   type GameStatus = 'LIVE' | 'STARTING_SOON' | 'RECENTLY_ENDED' | 'SCHEDULED'
 

@@ -292,3 +292,58 @@ describe('whole-word matching', () => {
     expect(matchTeam('New England Patriots', 'nfl', 'ne at buf').score).toBe(1)
   })
 })
+
+describe('NHL matching', () => {
+  const game = makeGame('nhl', 'Toronto Maple Leafs', 'Montreal Canadiens')
+
+  it('matches nicknames, cities and ESPN abbreviations', () => {
+    expect(matchGame(game, 'Canadiens vs Maple Leafs')).toBe(0.9)
+    expect(matchGame(game, 'Montreal at Toronto')).toBe(0.9)
+    expect(matchGame(game, 'MTL @ TOR')).toBe(0.9)
+    expect(matchGame(game, 'Habs vs Leafs')).toBe(0.9)
+  })
+
+  it('matches the accented Montréal spelling', () => {
+    expect(matchTeam('Montreal Canadiens', 'nhl', 'Montréal Canadiens').score).toBe(1)
+  })
+
+  it("matches Utah under both the Mammoth and its old Hockey Club name", () => {
+    expect(matchTeam('Utah Mammoth', 'nhl', 'utah hockey club vs kraken').score).toBe(1)
+    expect(matchTeam('Utah Mammoth', 'nhl', 'mammoth vs kraken').score).toBe(1)
+  })
+
+  it('does not treat "Wild Card" as the Minnesota Wild', () => {
+    expect(matchTeam('Minnesota Wild', 'nhl', 'nfl wild card round').score).toBe(0)
+  })
+})
+
+describe('cross-league name collisions', () => {
+  it('does not match an NHL game from an NBA listing in the same cities', () => {
+    const game = makeGame('nhl', 'Boston Bruins', 'Toronto Maple Leafs')
+    expect(matchGame(game, 'Boston Celtics vs Toronto Raptors')).toBe(0)
+  })
+
+  it('does not match an NBA game from an NHL listing in the same cities', () => {
+    const game = makeGame('nba', 'Boston Celtics', 'Toronto Raptors')
+    expect(matchGame(game, 'Toronto Maple Leafs @ Boston Bruins')).toBe(0)
+  })
+
+  it('does not match a shared nickname qualified by another city', () => {
+    expect(matchTeam('Los Angeles Kings', 'nhl', 'sacramento kings vs nuggets').score).toBe(0)
+    expect(matchTeam('New Jersey Devils', 'nhl', 'duke blue devils vs unc').score).toBe(0)
+  })
+
+  it('still matches when the city also appears on its own', () => {
+    const game = makeGame('nhl', 'Boston Bruins', 'Toronto Maple Leafs')
+    expect(matchGame(game, 'Toronto Maple Leafs vs Boston')).toBe(0.9)
+  })
+
+  it('still matches bare city names', () => {
+    const game = makeGame('nhl', 'Boston Bruins', 'Toronto Maple Leafs')
+    expect(matchGame(game, 'Toronto vs Boston')).toBe(0.9)
+  })
+
+  it('keeps a college match from firing on a sibling school', () => {
+    expect(matchTeam('Oklahoma Sooners', 'cfb', 'oklahoma state cowboys vs baylor').score).toBe(0)
+  })
+})

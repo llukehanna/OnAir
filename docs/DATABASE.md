@@ -15,7 +15,7 @@ What discovery has seen. Upserted on every ESPN poll.
 | Column | Type | Notes |
 |---|---|---|
 | `game_id` | TEXT PK | `${league}_${espnEventId}` |
-| `league` | TEXT | `nba`, `nfl`, `mlb`, `cbb`, `cfb` |
+| `league` | TEXT | `nba`, `nfl`, `mlb`, `nhl`, `cbb`, `cfb` |
 | `team_home`, `team_away` | TEXT | ESPN display names |
 | `start_time` | INTEGER | Unix ms |
 | `status` | TEXT | `LIVE`, `STARTING_SOON`, `SCHEDULED`, `RECENTLY_ENDED` |

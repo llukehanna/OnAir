@@ -7,7 +7,7 @@ import { getDb } from '../db/connection'
 import Database from 'better-sqlite3'
 import type { Game, LeagueId } from '../types'
 
-const LEAGUES: LeagueId[] = ['nba', 'nfl', 'mlb', 'cbb', 'cfb']
+const LEAGUES: LeagueId[] = ['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb']
 
 let timeoutHandle: ReturnType<typeof setTimeout> | null = null
 let lastSuccessfulPollAt = 0

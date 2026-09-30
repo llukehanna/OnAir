@@ -1,10 +1,11 @@
 /** Display order for league filters; also the order leagues appear in the top bar. */
-export const LEAGUE_ORDER: LeagueId[] = ['nfl', 'nba', 'mlb', 'cfb', 'cbb']
+export const LEAGUE_ORDER: LeagueId[] = ['nfl', 'nba', 'mlb', 'nhl', 'cfb', 'cbb']
 
 const LEAGUE_LABEL: Record<LeagueId, string> = {
   nfl: 'NFL',
   nba: 'NBA',
   mlb: 'MLB',
+  nhl: 'NHL',
   cfb: 'College Football',
   cbb: 'College Basketball',
 }
@@ -13,6 +14,7 @@ const LEAGUE_SHORT: Record<LeagueId, string> = {
   nfl: 'NFL',
   nba: 'NBA',
   mlb: 'MLB',
+  nhl: 'NHL',
   cfb: 'CFB',
   cbb: 'CBB',
 }

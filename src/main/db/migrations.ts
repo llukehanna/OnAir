@@ -167,6 +167,19 @@ const migrations: Migration[] = [
       `)
     }
   },
+  {
+    version: 4,
+    name: 'sources_add_nhl',
+    // Built-in rows are seeded once and never re-synced, so rows still holding
+    // the pre-NHL default league list pick up 'nhl'. A row with any other
+    // list was edited by the operator and is left alone.
+    up: (db) => {
+      db.prepare('UPDATE sources SET supported_leagues = ? WHERE supported_leagues = ?').run(
+        JSON.stringify(['nba', 'nfl', 'mlb', 'nhl', 'cbb', 'cfb']),
+        JSON.stringify(['nba', 'nfl', 'mlb', 'cbb', 'cfb'])
+      )
+    }
+  },
 ]
 
 export function runMigrations(dbOverride?: Database.Database): void {
