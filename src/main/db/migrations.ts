@@ -180,6 +180,17 @@ const migrations: Migration[] = [
       )
     }
   },
+  {
+    version: 5,
+    name: 'thetvapp_confidence',
+    // TheTVApp mirrors went from 0.6 to 0.85 (adapters/sources/thetvapp.ts).
+    // Same re-sync rule as v4: only rows still on the old seed value move.
+    up: (db) => {
+      db.prepare(
+        "UPDATE sources SET confidence_weight = 0.85 WHERE source_id IN ('tvapp1-com', 'thetvapp-plus', 'thetvapp-st') AND confidence_weight = 0.6"
+      ).run()
+    }
+  },
 ]
 
 export function runMigrations(dbOverride?: Database.Database): void {

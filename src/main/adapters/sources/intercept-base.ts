@@ -142,18 +142,18 @@ export class InterceptAdapter implements SourceAdapter {
       // than burn the rest of the intercept timeout on it.
       if (await isBlocked(page).catch(() => false)) return []
 
-      // 2. Find the game's page among the listing's links.
+      // 2. Find the game's page among the listing's links. No link means this
+      //    source doesn't carry the game: stop here. Whatever the listing
+      //    page's own player shows is never the game, and capturing it held a
+      //    pool slot long enough to starve the sources that do carry it.
       const link = await this.findGameLink(page, game)
-      const targetUrl = link ? link.url : listingUrl
+      if (!link) return []
+      const targetUrl = link.url
 
-      // Text for the engine matcher: the matched listing label when there is
-      // one, otherwise the page title. Without this, the matcher could only
-      // score the stream URL, and CDN paths never name teams.
-      let matchText: string | null = link ? link.text : null
-      if (matchText === null) {
-        const title = await page.title().catch(() => '')
-        matchText = title !== '' ? title : null
-      }
+      // Text for the engine matcher: the matched listing label. Without it,
+      // the matcher could only score the stream URL, and CDN paths never
+      // name teams.
+      const matchText = link.text
 
       // 3. Capture the stream the player requests on the game page.
       const captured = await interceptStreams(

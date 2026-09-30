@@ -158,6 +158,22 @@ describe('InterceptAdapter', () => {
     expect(page.waitForTimeout).toHaveBeenCalled()
   })
 
+  it('does not intercept the listing page when no link names the game', async () => {
+    // The listing page's own player (a 24/7 channel, a promo) is never the
+    // game — and capturing it held a pool slot ~12s, starving the sources
+    // that do carry the game past the 30s extraction timeout.
+    const page = makeMockPage({
+      anchors: [{ url: 'https://test.example/watch/bulls-heat', text: 'Bulls vs Heat Live' }],
+      streamUrl: 'https://cdn.example/live/some-channel.m3u8',
+    })
+    const { pool, release } = makeFakePool(page)
+    const adapter = new TestAdapter(testConfig)
+
+    expect(await adapter.getCandidateStreams(game, pool)).toEqual([])
+    expect(page.goto).toHaveBeenCalledTimes(1)
+    expect(release).toHaveBeenCalledWith(page)
+  })
+
   it('returns [] when no listing link names the game', async () => {
     const page = makeMockPage({
       anchors: [{ url: 'https://test.example/watch/bulls-heat', text: 'Bulls vs Heat Live' }],

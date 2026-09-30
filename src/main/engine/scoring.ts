@@ -67,3 +67,21 @@ export function computeScore(
 
   return rawScore * multiplier
 }
+
+/**
+ * Orders sources for dispatch (0–1): which adapters get a browser-pool page
+ * first. Only 4 pages run at once, so a source that never has the game can
+ * hold a page while the one that does waits — past the 30s extraction
+ * timeout. Proven sources go first.
+ *
+ *   priority = 0.7 × startup success rate + 0.3 × adapter confidenceWeight
+ *
+ * A source with no history gets a neutral 0.5 success rate, so until it has
+ * a track record its confidenceWeight decides where it queues.
+ */
+export function sourcePriority(reliability: ReliabilityMetrics | null, confidenceWeight: number): number {
+  const successes = reliability?.startupSuccesses ?? 0
+  const failures = reliability?.startupFailures ?? 0
+  const successRate = (successes + failures) === 0 ? 0.5 : successes / (successes + failures)
+  return 0.7 * successRate + 0.3 * confidenceWeight
+}

@@ -8,7 +8,7 @@ import { getReliability } from '../db/queries/reliability'
 import { getChannelLinks } from '../db/queries/channels'
 import { matchGame } from './matcher'
 import { probeCandidate } from './prober'
-import { computeScore } from './scoring'
+import { computeScore, sourcePriority } from './scoring'
 
 // ---------------------------------------------------------------------------
 // Internal pipeline type
@@ -90,7 +90,15 @@ async function collectGameCandidates(
     }
     eligible.push({ adapter, source })
   }
-  console.log(`[candidates] eligible adapters: ${eligible.map(e => e.adapter.sourceId)}`)
+
+  // Adapters queue for pool pages in call order, so call the most reliable
+  // first — see sourcePriority. Stable sort: ties keep registry order.
+  const priority = new Map(eligible.map(({ adapter }) => [
+    adapter.sourceId,
+    sourcePriority(getReliability(adapter.sourceId, game.league, db), adapter.confidenceWeight),
+  ]))
+  eligible.sort((a, b) => priority.get(b.adapter.sourceId)! - priority.get(a.adapter.sourceId)!)
+  console.log(`[candidates] eligible adapters (dispatch order): ${eligible.map(e => e.adapter.sourceId)}`)
 
   // ── Step 2: Call getCandidateStreams concurrently ─────────────────────────
   // Use streaming approach: process adapter results as they arrive.
