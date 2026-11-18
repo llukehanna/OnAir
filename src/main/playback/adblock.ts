@@ -84,8 +84,11 @@ export async function initAdBlock(
     }
   }
 
-  // Parse ||domain^ and ||domain/path patterns into a Set of blocked domains
+  // Parse ||domain^ rules into a Set of blocked domains, and ||domain/path
+  // rules into per-host path prefixes. A path rule must never block its whole
+  // host: ||embed.st/ad.html once took down TheTVApp's entire player.
   const blockedDomains = new Set<string>()
+  const blockedPaths = new Map<string, string[]>()
 
   for (const line of allLines) {
     const trimmed = line.trim()
@@ -93,17 +96,26 @@ export async function initAdBlock(
     // Skip empty lines, comments, and exception rules (@@)
     if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('@@')) continue
 
-    // Match ||domain^ pattern (most common EasyList entry)
-    const domainCaretMatch = trimmed.match(/^\|\|([a-zA-Z0-9._-]+)\^/)
+    // A $domain= rule only applies on the sites it names — applying it
+    // everywhere (||b-cdn.net^$domain=bunkr.cr|...) blocks shared CDNs that
+    // players need. We don't track the page a request came from, so skip it.
+    const optionsAt = trimmed.indexOf('$')
+    if (optionsAt !== -1 && /(^|,)domain=/.test(trimmed.slice(optionsAt + 1))) continue
+
+    // ||domain^ (most common EasyList entry), with nothing after but options
+    const domainCaretMatch = trimmed.match(/^\|\|([a-zA-Z0-9._-]+)\^(\$|$)/)
     if (domainCaretMatch) {
       blockedDomains.add(domainCaretMatch[1])
       continue
     }
 
-    // Match ||domain/path pattern
-    const domainPathMatch = trimmed.match(/^\|\|([a-zA-Z0-9._-]+)\//)
+    // ||domain/path — block the literal path prefix, up to any wildcard
+    const domainPathMatch = trimmed.match(/^\|\|([a-zA-Z0-9._-]+)(\/[^*^$|]*)/)
     if (domainPathMatch) {
-      blockedDomains.add(domainPathMatch[1])
+      const [, host, pathPrefix] = domainPathMatch
+      const prefixes = blockedPaths.get(host) ?? []
+      prefixes.push(pathPrefix)
+      blockedPaths.set(host, prefixes)
     }
   }
 
@@ -114,11 +126,13 @@ export async function initAdBlock(
       if (STREAM_EXTENSIONS.test(url)) return false
 
       try {
-        const hostname = new URL(url).hostname
+        const { hostname, pathname } = new URL(url)
         // Check exact match and parent domains
         const parts = hostname.split('.')
         for (let i = 0; i < parts.length - 1; i++) {
-          if (blockedDomains.has(parts.slice(i).join('.'))) return true
+          const domain = parts.slice(i).join('.')
+          if (blockedDomains.has(domain)) return true
+          if (blockedPaths.get(domain)?.some((prefix) => pathname.startsWith(prefix))) return true
         }
         return false
       } catch {

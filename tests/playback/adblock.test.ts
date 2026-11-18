@@ -96,6 +96,38 @@ describe('initAdBlock post-init', () => {
     })
   })
 
+  // Real EasyList rules that used to take down TheTVApp's embed.st player:
+  // a path rule blocked the whole host, and a rule scoped to other sites
+  // via $domain= blocked its host everywhere.
+  const SCOPED_RULES = `||embed.st/ad.html
+||b-cdn.net^$domain=bunkr.cr|bunkr.si|simpcity.cr
+||adhost.example/banners/
+`
+
+  async function rulesFrom(content: string) {
+    let rules: { isBlocked(url: string): boolean } | null = null
+    await jest.isolateModulesAsync(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { initAdBlock, getAdRules } = require('../../src/main/playback/adblock')
+      await initAdBlock('/tmp/test-userdata', makeMockFetch(content))
+      rules = getAdRules()
+    })
+    return rules!
+  }
+
+  it('a ||host/path rule blocks only that path, not the whole host', async () => {
+    const rules = await rulesFrom(SCOPED_RULES)
+    expect(rules.isBlocked('https://embed.st/ad.html')).toBe(true)
+    expect(rules.isBlocked('https://embed.st/embed/admin/ppv-vancouver-canucks-vs-edmonton-oilers/1')).toBe(false)
+    expect(rules.isBlocked('https://adhost.example/banners/top.gif')).toBe(true)
+    expect(rules.isBlocked('https://adhost.example/player.js')).toBe(false)
+  })
+
+  it('ignores rules scoped to other sites with $domain=', async () => {
+    const rules = await rulesFrom(SCOPED_RULES)
+    expect(rules.isBlocked('https://strmd.b-cdn.net/js/wasm/lock.wasm')).toBe(false)
+  })
+
   it('isBlocked returns false for .m3u8 stream URLs', async () => {
     await jest.isolateModulesAsync(async () => {
       const mockFetch = makeMockFetch()
