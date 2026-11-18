@@ -22,9 +22,8 @@ import { CHANNEL_ID_PREFIX } from '../types'
 //      or title-cased tokens otherwise) and a slug (alphanumeric-only,
 //      lowercased) that doubles as the category lookup key and channel id.
 //
-// See docs/superpowers/specs/2026-09-28-live-channels-guide-design.md for the
-// source rulings this encodes (channel-token retention, matchup regex
-// precedence, etc).
+// It encodes the guide's source rulings (channel-token retention, matchup
+// regex precedence, etc).
 // ---------------------------------------------------------------------------
 
 /** Tokens dropped wherever they appear — quality tags, region tags, filler. */
